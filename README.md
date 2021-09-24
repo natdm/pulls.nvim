@@ -21,7 +21,7 @@ While `pulls.nvim` tries to be self-encompassing, using `plentary.nvim` was a mu
 
 Example using [Packer.nvim](https://github.com/wbthomason/packer.nvim)
 ```lua
-use {'pulls.nvim', config = {require("pulls.nvim").setup(nil)}, requires = {'nvim-lua/plenary.nvim'}};
+use {'pulls.nvim', config = {require("pulls").setup(nil)}, requires = {'nvim-lua/plenary.nvim'}};
 ```
 
 The `setup(nil)` takes an optional table, the same structure that's found in [the config file](./lua/pulls/config.lua). Overriding this table and callng `setup()` with anything other than nil removes the default setup. If you do it, remember to remap every key.
@@ -38,13 +38,13 @@ local function nmapsl(pattern, action)
     map('n', '<leader>' .. pattern, action, options)
 end
 
-nmapsl("pt", '<cmd> lua require("pulls.nvim").tag_window()<CR>')
-nmapsl("pu", '<cmd> lua require("pulls.nvim").untag_window()<CR>')
-nmapsl("pd", '<cmd> lua require("pulls.nvim").description()<CR>')
-nmapsl("pp", '<cmd> lua require("pulls.nvim").diff()<CR>')
-nmapsl("pn", '<cmd> lua require("pulls.nvim").diff_next()<CR>')
-nmapsl("pc", '<cmd> lua require("pulls.nvim").list_changes()<CR>')
-nmapsl("ph", '<cmd> lua require("pulls.nvim").highlight_changes()<CR>')
+nmapsl("pt", '<cmd> lua require("pulls").tag_window()<CR>')
+nmapsl("pu", '<cmd> lua require("pulls").untag_window()<CR>')
+nmapsl("pd", '<cmd> lua require("pulls").description()<CR>')
+nmapsl("pp", '<cmd> lua require("pulls").diff()<CR>')
+nmapsl("pn", '<cmd> lua require("pulls").diff_next()<CR>')
+nmapsl("pc", '<cmd> lua require("pulls").list_changes()<CR>')
+nmapsl("ph", '<cmd> lua require("pulls").highlight_changes()<CR>')
 ```
 
 For more functions, `:h pulls.nvim`
@@ -54,7 +54,7 @@ As far as the built-in mappings, `pulls.nvim` has mappings for any diffs, commen
 Example of overriding for something new:
 
 ```lua
-require("pulls.nvim").setup {
+require("pulls").setup {
     mappings = {
         diff = { --
             show_comment = "sc", -- not default, but the rest are
