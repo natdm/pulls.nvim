@@ -30,7 +30,6 @@ end
 
 function M.new(pull_req_no, commit_id, file_path, diff_position, body)
     local url = string.format("%s/pulls/%i/comments", request.base_url(), pull_req_no)
-    print(url)
     local req = encode({ --
         path = file_path,
         position = diff_position,
