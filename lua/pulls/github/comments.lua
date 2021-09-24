@@ -31,21 +31,19 @@ end
 function M.new(pull_req_no, commit_id, file_path, diff_position, body)
     local url = string.format("%s/pulls/%i/comments", request.base_url(), pull_req_no)
     print(url)
-    local req = { --
+    local req = encode({ --
         path = file_path,
         position = diff_position,
         commit_id = commit_id,
         body = table.concat(body, "\r\n")
-    }
-    print(vim.inspect(req))
+    })
 
-    local resp = request.post({url = url, body = req})
+    local resp = request.post({url = url, headers = request.headers, body = req})
 
     if config.debug then
         print(vim.inspect(resp))
         return {success = true}
     else
-        print(vim.inspect(resp))
         if resp.status ~= 201 then return {success = false, error = request.format_error_resp(resp)} end
         return {success = true, data = decode(resp.body)}
     end
