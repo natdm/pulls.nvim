@@ -70,7 +70,7 @@ end
 
 function View.create_uri(...)
     local str = "pulls://"
-    for _, v in ipairs(arg) do str = string.format("%s/%s", str, v) end
+    for _, v in ipairs(table.pack(...)) do str = string.format("%s/%s", str, v) end
     return str
 end
 
