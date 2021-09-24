@@ -9,6 +9,7 @@ return { --
     get_reviews = reviews.get,
     get_review_comments = reviews.get_comments,
     get_pull_requests = pr.get,
+    update_pull_requests = pr.update,
     get_pull_request_diff = pr.get_diff,
     get_pull_request_files = pr.get_files,
     get_comments = comments.get,

@@ -117,6 +117,9 @@ function View:set_view(type, uri, content, config)
         api.nvim_buf_set_keymap(buf, "n", m.add_comment, call("diff_add_comment()"), opt)
     elseif type == "description" then
         api.nvim_buf_set_name(buf, "Description")
+        local m = self.config.mappings.description
+        local opt = {noremap = true}
+        api.nvim_buf_set_keymap(buf, "n", m.edit, call("description_edit()"), opt)
     elseif type == "comment" then
         if not config.id then
             print("Need an id in config for comment")
@@ -211,15 +214,23 @@ end
 function View:input_loaded()
     return api.nvim_buf_is_loaded(self.msg_buf)
 end
+
+function View:edit_main_content(type, config)
+    -- Get the content of the main window view and put it in the edit window.
+    -- this is sketchy, it can theoretically edit any buffer -- todo: check for
+    -- invalid or unknown (to this view) buffers.
+    local buf = api.nvim_win_get_buf(0)
+    local lines = api.nvim_buf_get_lines(buf, 0, api.nvim_buf_line_count(buf), false)
+    self:show_input(type, lines, config)
+    return true
+end
+
 function View:show_input(type, content, config)
     config = config or {}
     local res = config.res or nil -- to change the viewport, eg: +10 or -20
 
     if self.msg_win == nil or not api.nvim_buf_is_loaded(self.msg_buf) then --
         api.nvim_command('rightbelow new')
-    else
-        print("msg_win is valid")
-        print(self.msg_win)
     end
 
     api.nvim_buf_attach(self.msg_buf, true, { --
@@ -250,7 +261,9 @@ function View:show_input(type, content, config)
     elseif type == "reply_comment" then
         api.nvim_buf_set_keymap(self.msg_buf, "n", m.submit, ":lua require('pulls').__internal.submit_reply()<CR>", opt)
         api.nvim_buf_set_name(self.msg_buf, "Reply")
-
+    elseif type == "edit_desc" then
+        api.nvim_buf_set_keymap(self.msg_buf, "n", m.submit, ":lua require('pulls').__internal.submit_description_edit()<CR>", opt)
+        api.nvim_buf_set_name(self.msg_buf, "Edit Description")
     end
 
     if content ~= nil then api.nvim_buf_set_lines(self.msg_buf, 0, -1, false, content) end
