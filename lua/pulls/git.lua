@@ -4,12 +4,13 @@ local M = {}
 local function get_remote_http_url()
     local remote_origin = vim.fn.system("git config --get remote.origin.url")
     local url = string.gsub(remote_origin, "%s+", "")
+
     -- "git@github.com:natdm/pulls.git"
     -- force to be https if not already, since we're calling the api and not always the cli
     if string.find(url, "git@") then
         url = string.gsub(url, ":", "/")
         url = string.gsub(url, "%.git", "")
-        url = string.gsub(url, "git@", "https://")
+        url = string.gsub(url, "git@", "https://api.")
     end
     return url
 end
@@ -26,10 +27,8 @@ function M.sha()
 end
 
 function M.get_repo_info()
-    local url = get_remote_http_url()
-    local owner, project = url:match(".*/(.*)/(.*)")
+    local url, owner, project = get_remote_http_url():match("(.*)/(.*)/(.*)")
     return {owner = owner, project = project, url = url}
-
 end
 
 function _G.GitInfo()

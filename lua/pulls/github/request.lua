@@ -15,9 +15,9 @@ local function base()
 
     local repo_info = git.get_repo_info()
 
-    -- TODO: This doesn't work with hosted github.
-    return string.format("https://api.github.com/repos/%s/%s", --
-    repo_info.owner, repo_info.project)
+    base_url = string.format("%s/repos/%s/%s", --
+    repo_info.url, repo_info.owner, repo_info.project)
+    return base_url
 end
 
 local function format_error_resp(resp)
