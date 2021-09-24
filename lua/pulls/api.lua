@@ -6,15 +6,21 @@ local M = {}
 function M.pulls()
     return github.get_pull_requests()
 end
+
 function M.get_reviews(pr_no)
     return github.get_reviews(pr_no)
 end
+
 function M.get_review_comments(pr_no, review_id)
     return github.get_review_comments(pr_no, review_id)
 end
 
 function M.new_comment(pull_req_no, path, position, commit_id, body)
     return github.post_comment(pull_req_no, commit_id, path, position, body)
+end
+
+function M.description_edit(pull_req_no, body)
+    return github.update_pull_requests(pull_req_no, {body = body})
 end
 
 -- full diff for PR

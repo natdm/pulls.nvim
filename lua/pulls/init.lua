@@ -521,4 +521,48 @@ function M.__internal.diff_go_to_file(do_preview)
     if do_preview then vim.api.nvim_set_current_win(current_win) end
 end
 
+function M.__internal.description_edit()
+    -- for editing, change the view window to an edit window, then pop back one done (and refresh)
+    if not has_pr() then
+        print("No PR")
+        return
+    end
+
+    local name = vim.api.nvim_buf_get_name(0)
+    if not vim.endswith(name, "Description") then
+        print("not on description")
+        return
+    end
+    primary_view:edit_main_content("edit_desc")
+end
+
+function M.__internal.submit_description_edit()
+    -- TODO: This is identical to suvmitting comments, DRY.
+    if not has_pr() then
+        print("No PR")
+        return
+    end
+
+    if not comment_id then
+        print("no comment id set")
+        return
+    end
+    -- optimiztions: this will submit empty and useless comments. Either here or at the
+    -- api layer, filter out responses that are empty or only have line-breaks.
+    local content = primary_view:get_msg_lines()
+    if content == nil then return end
+
+    local body = create_resp_body(content)
+    body = table.concat(body, '\r\n')
+
+    local response = api.description_edit(pull_req.number, body)
+    if response.success ~= true then
+        print(response.error)
+    else
+        print("Responded")
+    end
+    primary_view:hide_input()
+    load_pull_request(true)
+end
+
 return M
