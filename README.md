@@ -8,6 +8,17 @@ If you're saying, "But [Octo](https://github.com/pwntester/octo.nvim) does that"
 
 ## Features
 
+- List comments in a quickfix list
+- List changed hunks of code in a quickfix list
+- View full diff
+  - Navigate to files from diff
+  - Preview files in a split (tagged) window
+  - Go to next diff chunk
+  - Go to next comment on diff
+  - Add comment on diff
+  - View comment chain on diff and reply
+- View/Edit description
+
 ## Functions
 
 The functions are listed in the [helpdocs](./doc/pulls.nvim.txt). Please consult that documentation for up to date functionality.
@@ -50,6 +61,9 @@ nmapsl("ph", '<cmd>lua require("pulls").highlight_changes()<CR>')
 -- ... etc
 ```
 
+To use a tagged window, have the diff up in a window and split it, then call `tag_window()` from the new split. 
+Navigate back to the diff. Any comments opened (`cg`/`cc`) or files opened (`cf`) will open in the tagged window.
+
 For more functions, `:h pulls.nvim`
 
 As far as the built-in mappings, `pulls.nvim` has mappings for any diffs, comments, replies, etc for any buffers it opens and controls. Any mapping in the setup is purely for `pulls.nvim` buffers, so nothing should collide with yours. These can be overridden in the `setup()` call. The fields are explained in [the config file](./lua/pulls/config.lua). There's also more documentation directly in the setup file, as per what fields do what.
@@ -75,7 +89,8 @@ require("pulls").setup {
 
 The project is very much beta, so the roadmap is hefty:
 
-- Editing (Comments, Description)
+- Editing (Comments)
 - Reviews (Viewing, adding, editing, adding reviews)
 - Emojis
 - Detailed statuses (Who has been assigned, who has approved, etc)
+- Add gitlab.
