@@ -28,6 +28,10 @@ https://github.com/natdm/pulls.nvim
 :h pulls.highlight_changes
 
 
+It's advised to not directly map to any function that already has a mapping, as these
+are for `pulls.nvim` buffer usage only. If you wish to change those mappings. please
+configure that in the `setup({...})` call.
+
 pulls.setup({opts})                                              *pulls.setup()*
     Setup function to be run by user. Calling with nil sets the default mappings.
     The mappings are grouped by the diff the contents would have. Each diff 

@@ -2,16 +2,13 @@
 
 *TL;DR: View, comment, browse a pull request on the currently checked out branch.*
 
-If you're saying, "But [Octo](https://github.com/pwntester/octo.nvim) does that", you're right. I think of Octo as "Github, but in Neovim", whereas this is more of a lightweight vim-centric way of interacting with PR's as you work with a branch for a PR. 
-
+If you're saying, "But [Octo](https://github.com/pwntester/octo.nvim) does that", you're right. I think of Octo as "Github, but in Neovim". `Pulls.nvim` is more of a lightweight vim-centric way of interacting with PR's as you work with a branch for a PR.
 
 ## Features
 
 ## Functions
 
-`get_comments()`
-
-Does things
+The functions are listed in the [helpdocs](./docs/pulls.nvim.txt). Please consult that documentation for up to date functionality.
 
 ## Mappings and Usage
 
@@ -51,14 +48,14 @@ nmapsl("ph", '<cmd> lua require("pulls").highlight_changes()<CR>')
 
 For more functions, `:h pulls.nvim`
 
-As far as the built-in mappings, `pulls.nvim` has mappings for any diffs, comments, replies, etc. These can be overridden in the `setup()` call. The fields are explained in [the config file](./lua/pulls/config.lua)
+As far as the built-in mappings, `pulls.nvim` has mappings for any diffs, comments, replies, etc for any buffers it opens and controls. Any mapping in the setup is purely for `pulls.nvim` buffers, so nothing should collide with yours. These can be overridden in the `setup()` call. The fields are explained in [the config file](./lua/pulls/config.lua). There's also more documentation directly in the setup file, as per what fields do what.
 
 Example of overriding for something new:
 
 ```lua
 require("pulls").setup {
     mappings = {
-        diff = { --
+        diff = {
             show_comment = "sc", -- not default, but the rest are
             add_comment = "cc",
             next_comment = "cn",
