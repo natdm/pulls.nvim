@@ -345,7 +345,7 @@ function M.__internal.submit_comment()
     local resp = api.new_comment(pull_req.number, comment_details.path, comment_details.position, git.sha(), lines)
     primary_view:hide_input()
     primary_view:remove_highlight_comment_line()
-    if not resp.success then print("unable to post comment: " .. resp.body) end
+    if not resp.success then print("unable to post comment: " .. (resp.error or "<nil>")) end
     load_pull_request(true)
 end
 function M.__internal.diff_next()

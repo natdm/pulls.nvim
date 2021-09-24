@@ -50,6 +50,11 @@ pulls.setup({opts})                                              *pulls.setup()*
 		    preview_file = "cp"
 		},
 
+		description = { -- Mappings for when the cursor is in the PR description.
+		    -- Edit the PR description.
+		    edit = "ce"
+		},
+
 		comments = { -- Mappings for when viewing a thread
 		    -- Draft a reply to a comment. Opens a new diff.
 		    reply = "cc"
