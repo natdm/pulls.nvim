@@ -1,5 +1,7 @@
 # Pulls.nvim
 
+[CLICK HERE FOR DEMO](https://youtu.be/dMYJFKe9A_8)
+
 *TL;DR: View, comment, browse a pull request on the currently checked out branch.*
 
 If you're saying, "But [Octo](https://github.com/pwntester/octo.nvim) does that", you're right. I think of Octo as "Github, but in Neovim". `Pulls.nvim` is more of a lightweight vim-centric way of interacting with PR's as you work with a branch for a PR.
@@ -37,14 +39,14 @@ local function nmapsl(pattern, action)
     map('n', '<leader>' .. pattern, action, options)
 end
 
-nmapsl("pt", '<cmd> lua require("pulls").tag_window()<CR>')
-nmapsl("pu", '<cmd> lua require("pulls").untag_window()<CR>')
-nmapsl("ps", '<cmd> lua require("pulls").comments()<CR>')
-nmapsl("pd", '<cmd> lua require("pulls").description()<CR>')
-nmapsl("pp", '<cmd> lua require("pulls").diff()<CR>')
-nmapsl("pn", '<cmd> lua require("pulls").diff_next()<CR>')
-nmapsl("pc", '<cmd> lua require("pulls").list_changes()<CR>')
-nmapsl("ph", '<cmd> lua require("pulls").highlight_changes()<CR>')
+nmapsl("pt", '<cmd>lua require("pulls").tag_window()<CR>')
+nmapsl("pu", '<cmd>lua require("pulls").untag_window()<CR>')
+nmapsl("ps", '<cmd>lua require("pulls").comments()<CR>')
+nmapsl("pd", '<cmd>lua require("pulls").description()<CR>')
+nmapsl("pp", '<cmd>lua require("pulls").diff()<CR>')
+nmapsl("pn", '<cmd>lua require("pulls").diff_next()<CR>')
+nmapsl("pc", '<cmd>lua require("pulls").list_changes()<CR>')
+nmapsl("ph", '<cmd>lua require("pulls").highlight_changes()<CR>')
 -- ... etc
 ```
 

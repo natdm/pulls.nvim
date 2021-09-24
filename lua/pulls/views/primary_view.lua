@@ -42,11 +42,16 @@ function View:show_qflist(key)
     vim.cmd("copen")
 end
 
+function View.create_uri(...)
+    local str = "pulls:/"
+    for _, v in ipairs(table.pack(...)) do str = string.format("%s/%s", str, v) end
+    return str
+end
+
 -- returns 0 on error
 function View:get_buffer(type, config)
-    local repo = git.get_repo_info()
     local name = config.name or "-"
-    local uri = string.format("pulls://%s/%s/%s/%s/%s", repo.owner, repo.project, self.pr_number, type, name)
+    local uri = self.create_uri(self.pr_number, type. name)
     local buftype = config.buftype or 'nofile'
     local filetype = config.filetype or 'txt'
     local buf = self.buffers[uri]
@@ -66,12 +71,6 @@ end
 
 function View.create_comment_uri(path, line)
     return string.format("%s:%s", path, line)
-end
-
-function View.create_uri(...)
-    local str = "pulls://"
-    for _, v in ipairs(table.pack(...)) do str = string.format("%s/%s", str, v) end
-    return str
 end
 
 function View:set_view_signs(uri, signs)
@@ -255,7 +254,7 @@ function View:show_input(type, content, config)
     api.nvim_win_set_option(self.msg_win, 'cursorline', true)
 
     local m = self.config.mappings.action
-    local opt = {noremap = true}
+    local opt = {noremap = true, silent = true}
 
     if type == "new_comment" then
         api.nvim_buf_set_keymap(self.msg_buf, "n", m.submit, ":lua require('pulls').__internal.submit_comment()<CR>", opt)
