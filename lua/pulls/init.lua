@@ -533,7 +533,7 @@ function M.__internal.description_edit()
         print("not on description")
         return
     end
-    primary_view:edit_main_content("edit_desc")
+    if not primary_view:edit_main_content("edit_desc") then print("unable to edit main content") end
 end
 
 function M.__internal.submit_description_edit()
@@ -543,10 +543,6 @@ function M.__internal.submit_description_edit()
         return
     end
 
-    if not comment_id then
-        print("no comment id set")
-        return
-    end
     -- optimiztions: this will submit empty and useless comments. Either here or at the
     -- api layer, filter out responses that are empty or only have line-breaks.
     local content = primary_view:get_msg_lines()
@@ -559,7 +555,7 @@ function M.__internal.submit_description_edit()
     if response.success ~= true then
         print(response.error)
     else
-        print("Responded")
+        print("Updated")
     end
     primary_view:hide_input()
     load_pull_request(true)

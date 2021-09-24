@@ -217,13 +217,12 @@ end
 
 function View:edit_main_content(type, config)
     -- Get the content of the main window view and put it in the edit window.
-    local win = api.nvim_get_current_win()
-    if win ~= self.win then return false end
-
-    local buf = api.nvim_win_get_buf(win)
+    -- this is sketchy, it can theoretically edit any buffer -- todo: check for
+    -- invalid or unknown (to this view) buffers.
+    local buf = api.nvim_win_get_buf(0)
     local lines = api.nvim_buf_get_lines(buf, 0, api.nvim_buf_line_count(buf), false)
-
     self:show_input(type, lines, config)
+    return true
 end
 
 function View:show_input(type, content, config)
@@ -232,9 +231,6 @@ function View:show_input(type, content, config)
 
     if self.msg_win == nil or not api.nvim_buf_is_loaded(self.msg_buf) then --
         api.nvim_command('rightbelow new')
-    else
-        print("msg_win is valid")
-        print(self.msg_win)
     end
 
     api.nvim_buf_attach(self.msg_buf, true, { --
