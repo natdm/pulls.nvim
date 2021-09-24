@@ -1,0 +1,78 @@
+# Pulls.nvim
+
+*TL;DR: View, comment, browse a pull request on the currently checked out branch.*
+
+If you're saying, "But [Octo](https://github.com/pwntester/octo.nvim) does that", you're right. I think of Octo as "Github, but in Neovim", whereas this is more of a lightweight vim-centric way of interacting with PR's as you work with a branch for a PR. 
+
+
+## Features
+
+## Functions
+
+`get_comments()`
+
+Does things
+
+## Mappings and Usage
+
+### Usage
+
+While `pulls.nvim` tries to be self-encompassing, using `plentary.nvim` was a must for some functionality.
+
+Example using [Packer.nvim](https://github.com/wbthomason/packer.nvim)
+```lua
+use {'pulls.nvim', config = {require("pulls.nvim").setup(nil)}, requires = {'nvim-lua/plenary.nvim'}};
+```
+
+The `setup(nil)` takes an optional table, the same structure that's found in [the config file](./lua/pulls/config.lua). Overriding this table and callng `setup()` with anything other than nil removes the default setup. If you do it, remember to remap every key.
+
+### Mappings
+
+There are no mappings outside of the pulls-specific buffers, as I believe you should add what you want. To map a [function](#functions), do it as you would any other neovim plugin:
+
+```lua
+local map = vim.api.nvim_set_keymap
+
+local function nmapsl(pattern, action)
+    local options = {noremap = true, silent = true}
+    map('n', '<leader>' .. pattern, action, options)
+end
+
+nmapsl("pt", '<cmd> lua require("pulls.nvim").tag_window()<CR>')
+nmapsl("pu", '<cmd> lua require("pulls.nvim").untag_window()<CR>')
+nmapsl("pd", '<cmd> lua require("pulls.nvim").description()<CR>')
+nmapsl("pp", '<cmd> lua require("pulls.nvim").diff()<CR>')
+nmapsl("pn", '<cmd> lua require("pulls.nvim").diff_next()<CR>')
+nmapsl("pc", '<cmd> lua require("pulls.nvim").list_changes()<CR>')
+nmapsl("ph", '<cmd> lua require("pulls.nvim").highlight_changes()<CR>')
+```
+
+For more functions, `:h pulls.nvim`
+
+As far as the built-in mappings, `pulls.nvim` has mappings for any diffs, comments, replies, etc. These can be overridden in the `setup()` call. The fields are explained in [the config file](./lua/pulls/config.lua)
+
+Example of overriding for something new:
+
+```lua
+require("pulls.nvim").setup {
+    mappings = {
+        diff = { --
+            show_comment = "sc", -- not default, but the rest are
+            add_comment = "cc",
+            next_comment = "cn",
+            goto_file = "cf"
+        },
+        comments = {reply = "cc"},
+        action = {submit = "<C-y>"}
+    }
+}
+```
+
+## Roadmap
+
+The project is very much beta, so the roadmap is hefty:
+
+- Editing (Comments, Description)
+- Reviews (Viewing, adding, editing, adding reviews)
+- Emojis
+- Detailed statuses (Who has been assigned, who has approved, etc)
