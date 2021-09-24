@@ -14,10 +14,11 @@ local function base()
     if base_url ~= "" then return base_url end
 
     local repo_info = git.get_repo_info()
+    local repo_url = git.get_remote_http_url()
 
     -- TODO: This doesn't work with hosted github.
-    return string.format("https://api.github.com/repos/%s/%s", --
-    repo_info.owner, repo_info.project)
+    return string.format("%s/repos/%s/%s", --
+    repo_url, repo_info.owner, repo_info.project)
 end
 
 local function format_error_resp(resp)
