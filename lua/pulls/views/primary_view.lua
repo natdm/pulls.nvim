@@ -68,8 +68,10 @@ function View.create_comment_uri(path, line)
     return string.format("%s:%s", path, line)
 end
 
-function View.create_uri(repo_owner, project, pr_no, view_type, id)
-    return string.format("pulls://%s/%s/%s/%s/%s", repo_owner, project, pr_no, view_type, id)
+function View.create_uri(...)
+    local str = "pulls://"
+    for _, v in ipairs(arg) do str = string.format("%s/%s", str, v) end
+    return str
 end
 
 function View:set_view_signs(uri, signs)
@@ -108,7 +110,7 @@ function View:set_view(type, uri, content, config)
         api.nvim_buf_set_name(buf, "Diff")
         api.nvim_buf_set_option(buf, 'filetype', 'diff')
         local m = self.config.mappings.diff
-        local opt = {noremap = true}
+        local opt = {noremap = true, silent = true}
         api.nvim_buf_set_keymap(buf, "n", m.show_comment, call("diff_show_comment()"), opt)
         api.nvim_buf_set_keymap(buf, "n", m.next_comment, call("diff_next_comment()"), opt)
         api.nvim_buf_set_keymap(buf, "n", m.next_hunk, call("diff_next()"), opt)
@@ -118,7 +120,7 @@ function View:set_view(type, uri, content, config)
     elseif type == "description" then
         api.nvim_buf_set_name(buf, "Description")
         local m = self.config.mappings.description
-        local opt = {noremap = true}
+        local opt = {noremap = true, silent = true}
         api.nvim_buf_set_keymap(buf, "n", m.edit, call("description_edit()"), opt)
     elseif type == "comment" then
         if not config.id then

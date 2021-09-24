@@ -76,7 +76,7 @@ end
 
 local function save_desc_view(_pull_req)
     local desc = util.split_newlines(_pull_req.body)
-    local uri = views.create_uri("foo", "bar", pull_req.number, "description", "desc")
+    local uri = views.create_uri(pull_req.number, "description", "desc")
     primary_view:set_view("description", uri, desc, {})
 end
 
@@ -129,7 +129,7 @@ local function save_full_diff_view(pr_no, _comments)
         end
     end
 
-    local uri = views.create_uri("foo", "bar", pull_req.number, "diff", "full")
+    local uri = views.create_uri(pull_req.number, "diff", "full")
     primary_view:set_view("full_diff", uri, diff_lines, {})
     primary_view:set_view_signs(uri, diff_comment_signs)
 end
@@ -175,7 +175,7 @@ function M.description()
         print("No PR")
         return
     end
-    local uri = views.create_uri("foo", "bar", pull_req.number, "description", "desc")
+    local uri = views.create_uri(pull_req.number, "description", "desc")
     primary_view:show(uri, {split = true})
 end
 
@@ -217,7 +217,7 @@ function M.diff()
         print("No PR")
         return
     end
-    local uri = views.create_uri("foo", "bar", pull_req.number, "diff", "full")
+    local uri = views.create_uri(pull_req.number, "diff", "full")
     primary_view:show(uri, {split = true})
 end
 
