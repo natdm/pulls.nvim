@@ -4,6 +4,8 @@ Pulls.nvim                                                         *pulls.nvim*
 
 TL;DR: View, comment, browse a pull request on the currently checked out branch.
 
+Requires a github token set to the enironmental variable `GITHUB_API`.
+
 To find out more:
 https://github.com/natdm/pulls.nvim
 
@@ -80,78 +82,77 @@ pulls.untag_window()                                            *pulls.untag_win
 pulls.get_comments()                                            *pulls.get_comments()*
     Show the comments for a PR in the quickfix list.
 
-pulls.get_comment_chains()                                *pulls.get_comment_chains()*
 pulls.reply_to_comment()                                    *pulls.reply_to_comment()*
 
-    Default mapping: *cc*
+    Default mapping: `cc`
 
     Required to be within a comment chain to call.
 
     Open up a draft reply to a conversation. The opened up window is formatted for
     markdown.
 
-    Note about submit_comment(), submit_reply(), diff_add_comment(),
-    and reply_to_comment(): These are automatically mapped with the default mappings
+    Note about `submit_comment()`, `submit_reply()`, `diff_add_comment()`,
+    and `reply_to_comment()`: These are automatically mapped with the default mappings
     to be the same for each situation, so while they're totally different API calls,
     the motions are the same.
 
 pulls.submit_reply()                                            *pulls.submit_reply()*
 
-    Default mapping: *<C-y>*
+    Default mapping: `<C-y>`
 
     Required to be within a draft comment window to call.
 
     Submit the reply within the comment window opened with `get_comment_chains()` to
     github.
 
-    Note about submit_comment(), submit_reply(), diff_add_comment(),
-    and reply_to_comment(): These are automatically mapped with the default mappings
+    Note about `submit_comment()`, `submit_reply()`, `diff_add_comment()`,
+    and `reply_to_comment()`: These are automatically mapped with the default mappings
     to be the same for each situation, so while they're totally different API calls,
     the motions are the same.
 
 pulls.diff_add_comment()                                    *pulls.diff_add_comment()*
 
-    Default mapping: *cc*
+    Default mapping: `cc`
 
     Required to be within the diff window to call.
 
     Add a new comment to a diff. The comment will be applied to the line under the
     cursor.
 
-    Note about submit_comment(), submit_reply(), diff_add_comment(),
-    and reply_to_comment(): These are automatically mapped with the default mappings
+    Note about `submit_comment()`, `submit_reply()`, `diff_add_comment()`,
+    and `reply_to_comment()`: These are automatically mapped with the default mappings
     to be the same for each situation, so while they're totally different API calls,
     the motions are the same.
 
 pulls.diff_submit_comment()                              *pulls.diff_submit_comment()*
 
-    Default mapping: *<C-y>*
+    Default mapping: `<C-y>`
 
     Required to be within a draft comment window to call.
 
     Submit the new comment to Github for the current line. 
 
-    Note about submit_comment(), submit_reply(), diff_add_comment(),
-    and reply_to_comment(): These are automatically mapped with the default mappings
+    Note about `submit_comment()`, `submit_reply()`, `diff_add_comment()`,
+    and `reply_to_comment()`: These are automatically mapped with the default mappings
     to be the same for each situation, so while they're totally different API calls,
     the motions are the same.
 
 pulls.diff_show_comment()                                  *pulls.diff_show_comment()*
 
-    Default mapping: *cg*
+    Default mapping: `cg`
 
     Required to be within the diff to call, with the cursor on the comment line
 
 pulls.diff_next_comment()                                  *pulls.diff_next_comment()*
 
-    Default mapping: *cn*
+    Default mapping: `cn`
 
     Required to be within the diff to call. Navigates the mouse to the next comment,
     or EOF if no more comments.
 
 pulls.diff_go_to_file()                                      *pulls.diff_go_to_file()*
 
-    Default mapping: *cf*
+    Default mapping: `cf`
 
     Required to be within a draft comment window to call.
 

@@ -17,6 +17,8 @@ Does things
 
 ### Usage
 
+Make sure you have a github token set in your environment, at `GITHUB_API`.
+
 While `pulls.nvim` tries to be self-encompassing, using `plentary.nvim` was a must for some functionality.
 
 Example using [Packer.nvim](https://github.com/wbthomason/packer.nvim)
