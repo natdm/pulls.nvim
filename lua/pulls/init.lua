@@ -144,11 +144,9 @@ local function load_pull_request(refreshing)
     pull_req = pulls[1]
 
     if not primary_view then primary_view = views:new(pull_req.number, config) end
-    comments = api.comments_for_pull(pull_req.review_comments_url)
+    comments = api.comments_for_pull(pull_req.number)
     pull_req_files = api.files_for_pull(pull_req.number)
     if pull_req_files ~= nil then diff_files = differ.diff(pull_req_files.data) end
-    -- Skip this in favor of a full diff for now
-    -- save_files_diff_views(diff_files)
     save_desc_view(pull_req)
     save_full_diff_view(pull_req.number, comments.data)
     save_comment_chains(comments.data)
