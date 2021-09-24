@@ -28,7 +28,7 @@ function M.get_diff(pull_req_no)
 
     local req = {url = url, headers = custom_headers}
     local resp = request.get(req)
-    if resp.status ~= 200 then return {success = false, error = resp.body} end
+    if resp.status ~= 200 then return {success = false, error = request.format_error_resp(resp)} end
     -- not json, do not decode
     return {success = true, data = resp.body}
 end
@@ -47,14 +47,14 @@ function M.update(pull_req_no, opts)
         print(vim.inspect(resp))
         return {success = true}
     end
-    if resp.status ~= 200 then return {success = false, data = resp.body} end
+    if resp.status ~= 200 then return {success = false, error = request.format_error_resp(resp)} end
     return {success = true, data = decode(resp.body)}
 end
 
 function M.get_files(pull_req_no)
     local url = string.format("%s/pulls/%i/files", request.base_url(), pull_req_no)
     local resp = request.get({url = url, headers = request.headers})
-    if resp.status ~= 200 then return {success = false, error = resp.body} end
+    if resp.status ~= 200 then return {success = false, error = request.format_error_resp(resp)} end
     local files = decode(resp.body)
     return {success = true, data = files}
 end

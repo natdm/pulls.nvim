@@ -1,5 +1,4 @@
 local request = require('pulls.github.request')
--- local encode = vim.fn.json_encode
 local decode = vim.fn.json_decode
 
 local M = {}
@@ -8,7 +7,7 @@ function M.get(pull_req_no)
     local url = string.format("%s/pulls/%i/reviews", request.base_url(), pull_req_no)
     local req = {url = url, headers = request.headers}
     local resp = request.get(req)
-    if resp.status ~= 200 then return {success = false, error = resp.body} end
+    if resp.status ~= 200 then return {success = false, error = request.format_error_resp(resp)} end
     return {success = true, data = decode(resp.body)}
 end
 

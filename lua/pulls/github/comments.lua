@@ -8,7 +8,7 @@ local M = {}
 function M.get(pull_req_no)
     local url = string.format("%s/pulls/%i/comments", request.base_url(), pull_req_no)
     local resp = request.get({url = url, headers = request.headers})
-    if resp.status ~= 200 then return {success = false, error = resp.body} end
+    if resp.status ~= 200 then return {success = false, error = request.format_error_resp(resp)} end
     return {success = true, data = decode(resp.body)}
 end
 
@@ -22,7 +22,7 @@ function M.reply(pull_req_no, comment_id, body)
         print(vim.inspect(resp))
         return {success = true}
     else
-        if resp.status ~= 201 then return {success = false, error = resp.body} end
+        if resp.status ~= 201 then return {success = false, error = request.format_error_resp(resp)} end
         -- not json, do not parse
         return {success = true, data = decode(resp.body)}
     end
@@ -30,21 +30,23 @@ end
 
 function M.new(pull_req_no, commit_id, file_path, diff_position, body)
     local url = string.format("%s/pulls/%i/comments", request.base_url(), pull_req_no)
-    local encoded = encode({ --
-        url = url,
+    print(url)
+    local req = { --
         path = file_path,
         position = diff_position,
         commit_id = commit_id,
         body = table.concat(body, "\r\n")
-    })
+    }
+    print(vim.inspect(req))
 
-    local resp = request.post(encoded)
+    local resp = request.post({url = url, body = req})
 
     if config.debug then
         print(vim.inspect(resp))
         return {success = true}
     else
-        if resp.status ~= 201 then return {success = false, error = resp.body} end
+        print(vim.inspect(resp))
+        if resp.status ~= 201 then return {success = false, error = request.format_error_resp(resp)} end
         return {success = true, data = decode(resp.body)}
     end
 end
