@@ -8,7 +8,7 @@ If you're saying, "But [Octo](https://github.com/pwntester/octo.nvim) does that"
 
 ## Functions
 
-The functions are listed in the [helpdocs](./docs/pulls.nvim.txt). Please consult that documentation for up to date functionality.
+The functions are listed in the [helpdocs](./doc/pulls.nvim.txt). Please consult that documentation for up to date functionality.
 
 ## Mappings and Usage
 
