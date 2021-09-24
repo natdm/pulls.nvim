@@ -134,6 +134,18 @@ local function save_full_diff_view(pr_no, _comments)
     primary_view:set_view_signs(uri, diff_comment_signs)
 end
 
+local function save_reviews(pull_req_no)
+    local reviews = api.get_reviews(pull_req_no)
+    if not reviews.success then
+        print("unable to get reviews: " .. reviews.error)
+        return
+    end
+    -- NOTE:
+    -- Reviews some times have a `body` field, but some times do not. Do they have diffs?
+    -- They should always have relating `/comments`, which will have diffs and bodies.
+    -- How do we want to show these in an intuitie way?
+end
+
 local function load_pull_request(refreshing)
     if not refreshing then print("Loading pull request...") end
     local pulls = api.pulls()

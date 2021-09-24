@@ -6,6 +6,12 @@ local M = {}
 function M.pulls()
     return github.get_pull_requests()
 end
+function M.get_reviews(pr_no)
+    return github.get_reviews(pr_no)
+end
+function M.get_review_comments(pr_no, review_id)
+    return github.get_review_comments(pr_no, review_id)
+end
 
 function M.new_comment(pull_req_no, path, position, commit_id, body)
     return github.post_comment(pull_req_no, commit_id, path, position, body)
