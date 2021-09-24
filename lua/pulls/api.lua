@@ -2,7 +2,6 @@ local config = require("pulls.config")
 local git = require("pulls.git")
 local curl = require('plenary.curl')
 local util = require('pulls.util')
-local json = require('pulls.json')
 
 local M = {}
 
@@ -28,7 +27,7 @@ function M.pulls()
     local branch = git.current_branch()
     local head = repo_info.owner .. ":" .. branch
     local pull_reqs = curl.get({url = base() .. "/pulls", query = {state = "open", head = head}, headers = default_headers})
-    return json.parse(pull_reqs.body)
+    return vim.fn.json_decode(pull_reqs.body)
 end
 
 local default_comments_for_pull_opts = {sorted = true, hide_no_line_counts = true}
@@ -41,7 +40,7 @@ function M.new_comment(pull_req_no, path, position, commit_id, body)
     -- continues to increase through lines of whitespace and additional hunks until the
     -- beginning of a new file.
     local url = base() .. "/pulls/" .. pull_req_no .. "/comments"
-    local stringified_body = json.stringify({ --
+    local stringified_body = vim.fn.json_encode({ --
         path = path,
         position = position,
         commit_id = commit_id,
@@ -82,7 +81,7 @@ end
 function M.reply(pull_req_no, comment_id, body)
     local url = base() .. "/pulls/" .. pull_req_no .. "/comments/" .. comment_id .. "/replies"
 
-    local stringified_body = json.stringify({body = body})
+    local stringified_body = vim.fn.json_encode({body = body})
 
     local req = {url = url, headers = default_headers, body = stringified_body, dry_run = config.debug}
     local resp = curl.post(req)
@@ -126,7 +125,7 @@ function M.comments_for_pull(url, opts)
     local resp = curl.get({url = url, headers = default_headers})
     if resp.status ~= 200 then return {success = false, error = resp.body} end
 
-    local comments = json.parse(resp.body)
+    local comments = vim.fn.json_decode(resp.body)
 
     local entries = {}
     for _, comment in ipairs(comments) do
@@ -134,13 +133,13 @@ function M.comments_for_pull(url, opts)
         local ol = tostring(comment.original_line)
         if entries[comment.path][ol] == nil then entries[comment.path][ol] = {} end
 
+	print(vim.inspect(comment))
         -- NOTE: The pull request number isn't in the payloads here, it needs to be saved
-        -- to a variable in main.
-        -- TODO: These table (for nil) checks might go if we move to the standard json lib
+        -- to a variable in init.
         local position = comment.position
-        if type(position) == "table" then position = nil end
+        if position == vim.NIL then position = nil end
         local line = comment.line
-        if type(line) == "table" then line = nil end
+        if line == vim.NIL then line = nil end
 
         local formatted_comment = {
             user = comment.user.login,
@@ -176,7 +175,7 @@ function M.files_for_pull(pull_req_no)
 
     local resp = curl.get({url = url, headers = default_headers})
     if resp.status ~= 200 then return {success = false, error = resp.body} end
-    local files = json.parse(resp.body)
+    local files = vim.fn.json_decode(resp.body)
     return {success = true, data = files}
 end
 

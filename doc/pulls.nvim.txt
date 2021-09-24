@@ -1,8 +1,7 @@
 ================================================================================
 Pulls.nvim                                                         *pulls.nvim*
 
-
-TL;DR: View, comment, browse a pull request on the currently checked out branch.
+View, comment, browse a pull request on the currently checked out branch.
 
 Requires a github token set to the enironmental variable `GITHUB_API`.
 
@@ -10,23 +9,14 @@ To find out more:
 https://github.com/natdm/pulls.nvim
 
 :h pulls.setup
+:h pulls.refresh
 :h pulls.description
 :h pulls.tag_window
 :h pulls.untag_window
-:h pulls.get_comments
-:h pulls.get_comment_chains
-:h pulls.reply_to_comment
-:h pulls.submit_reply
-:h pulls.diff_add_comment
-:h pulls.diff_submit_comment
-:h pulls.diff_show_comment
-:h pulls.diff_next_comment
-:h pulls.diff_go_to_file
+:h pulls.comments
 :h pulls.diff
-:h pulls.diff_next
 :h pulls.list_changes
 :h pulls.highlight_changes
-
 
 It's advised to not directly map to any function that already has a mapping, as these
 are for `pulls.nvim` buffer usage only. If you wish to change those mappings. please
@@ -37,9 +27,8 @@ pulls.setup({opts})                                              *pulls.setup()*
     The mappings are grouped by the diff the contents would have. Each diff 
     contains it's own mappings, so duplicating a key combination is not harmful.
 
-    Usage:
-    >
-    require('pulls.nvim').setup{
+    Usage: >
+    require('pulls').setup{
 	    mappings = {
 		-- Each key is grouped in a buffer. It's fine to use the same
 		-- mapping in different keys. eg: `diff` and `comments` can
@@ -54,7 +43,11 @@ pulls.setup({opts})                                              *pulls.setup()*
 		    -- Skip to the next comment in the diff (goes to EOF if none).
 		    next_comment = "cn",
 		    -- Goes to the file of the diff the cursor is under.
-		    goto_file = "cf"
+		    goto_file = "cf",
+		    -- If a window is tagged, the preview will show in that window, and
+		    -- the cursor will remain in the diff. No effect at all if no window
+		    -- is tagged.
+		    preview_file = "cp"
 		},
 
 		comments = { -- Mappings for when viewing a thread
@@ -68,111 +61,51 @@ pulls.setup({opts})                                              *pulls.setup()*
 		}
 	    }
 	}	
-    <
+<
+    
+
+    Mapping example: >
+    local map = vim.api.nvim_set_keymap
+    local opts = {noremap = true, silent = true}
+
+    map('n', '<leader>dd', '<cmd>lua require("pulls").diff()<CR>', opts)
+    map('n', '<leader>pt', '<cmd>lua require("pulls").tag_window()<CR>', opts)
+    map('n', '<leader>pu', '<cmd>lua require("pulls").untag_window()<CR>', opts)
+    map('n', '<leader>pd', '<cmd>lua require("pulls").description()<CR>', opts)
+    map('n', '<leader>pn', '<cmd>lua require("pulls").diff_next()<CR>', opts)
+    map('n', '<leader>pc', '<cmd>lua require("pulls").list_changes()<CR>', opts)
+    map('n', '<leader>ph', '<cmd>lua require("pulls").highlight_changes()<CR>', opts)
+<
+
+
+pulls.refresh()                                                      *pulls.refresh()*
+
+    Refresh the plugin state, calling github for new information.
 
 pulls.description()                                              *pulls.description()*
+
     View the description of the pull request. If there is a tagged window, it will be
     opened there.
 
 pulls.tag_window()                                                *pulls.tag_window()*
+
     Tag a window as the main view-port for future actions. If the screen is split for
     windows A and B, if the diff is up in A, but window B is tagged, any actions
     in A (viewing a comment, going to a file, etc) will appear in B instead, and
     the diff in A remains where it is.
 
 pulls.untag_window()                                            *pulls.untag_window()*
+
     Untag the previously tagged window.
 
-pulls.get_comments()                                            *pulls.get_comments()*
+pulls.comments()                                                    *pulls.comments()*
+
     Show the comments for a PR in the quickfix list.
-
-pulls.reply_to_comment()                                    *pulls.reply_to_comment()*
-
-    Default mapping: `cc`
-
-    Required to be within a comment chain to call.
-
-    Open up a draft reply to a conversation. The opened up window is formatted for
-    markdown.
-
-    Note about `submit_comment()`, `submit_reply()`, `diff_add_comment()`,
-    and `reply_to_comment()`: These are automatically mapped with the default mappings
-    to be the same for each situation, so while they're totally different API calls,
-    the motions are the same.
-
-pulls.submit_reply()                                            *pulls.submit_reply()*
-
-    Default mapping: `<C-y>`
-
-    Required to be within a draft comment window to call.
-
-    Submit the reply within the comment window opened with `get_comment_chains()` to
-    github.
-
-    Note about `submit_comment()`, `submit_reply()`, `diff_add_comment()`,
-    and `reply_to_comment()`: These are automatically mapped with the default mappings
-    to be the same for each situation, so while they're totally different API calls,
-    the motions are the same.
-
-pulls.diff_add_comment()                                    *pulls.diff_add_comment()*
-
-    Default mapping: `cc`
-
-    Required to be within the diff window to call.
-
-    Add a new comment to a diff. The comment will be applied to the line under the
-    cursor.
-
-    Note about `submit_comment()`, `submit_reply()`, `diff_add_comment()`,
-    and `reply_to_comment()`: These are automatically mapped with the default mappings
-    to be the same for each situation, so while they're totally different API calls,
-    the motions are the same.
-
-pulls.diff_submit_comment()                              *pulls.diff_submit_comment()*
-
-    Default mapping: `<C-y>`
-
-    Required to be within a draft comment window to call.
-
-    Submit the new comment to Github for the current line. 
-
-    Note about `submit_comment()`, `submit_reply()`, `diff_add_comment()`,
-    and `reply_to_comment()`: These are automatically mapped with the default mappings
-    to be the same for each situation, so while they're totally different API calls,
-    the motions are the same.
-
-pulls.diff_show_comment()                                  *pulls.diff_show_comment()*
-
-    Default mapping: `cg`
-
-    Required to be within the diff to call, with the cursor on the comment line
-
-pulls.diff_next_comment()                                  *pulls.diff_next_comment()*
-
-    Default mapping: `cn`
-
-    Required to be within the diff to call. Navigates the mouse to the next comment,
-    or EOF if no more comments.
-
-pulls.diff_go_to_file()                                      *pulls.diff_go_to_file()*
-
-    Default mapping: `cf`
-
-    Required to be within a draft comment window to call.
-
-    Navigate to the file for the current section of the dif.
-
-    NOTE: Tries to navigate you to the line as well, but it won't be completely
-    accurate.
 
 pulls.diff()                                                            *pulls.diff()*
 
     Show the diff for all files in the MR. From this diff, the functions for going
     to a file, comments, replying, etc, are accessible.
-
-pulls.diff_next()                                                  *pulls.diff_next()*
-
-    In a file, go to the next piece of code that has changes for this PR.
 
 pulls.list_changes()                                            *pulls.list_changes()*
 
@@ -185,3 +118,6 @@ pulls.highlight_changes()                                  *pulls.highlight_chan
     Red: deletes
     Yellow: changes
     Green: adds
+
+Author:  Nathan Hyland <https://github.com/natdm>                               *pulls-author*
+

@@ -12,8 +12,14 @@ return {
             add_comment = "cc",
             -- Skip to the next comment in the diff (goes to EOF if none).
             next_comment = "cn",
+            -- Go to next file (hunk) in diff, separated by diff headers (@@ ... @@)
+            next_hunk= "ch",
             -- Goes to the file of the diff the cursor is under.
-            goto_file = "cf"
+            goto_file = "cf",
+            -- If a window is tagged, the preview will show in that window, and
+            -- the cursor will remain in the diff. No effect at all if no window
+            -- is tagged.
+            preview_file = "cp"
         },
 
         comments = { -- Mappings for when viewing a thread

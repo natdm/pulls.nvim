@@ -5,7 +5,7 @@ local api = require("pulls.api")
 local util = require("pulls.util")
 local views = require("pulls.views.primary_view")
 
-local M = {}
+local M = {__internal = {}}
 
 local config = {}
 
@@ -85,11 +85,6 @@ end
 local diff_chunk_start_lines = {}
 
 local function save_full_diff_view(pr_no, _comments)
-    -- TODO: shortcuts for:
-    --   going to next commented line
-    --   commenting on line
-    --   expanding comment on line
-    --   going to file/line?
     local diff = api.diff(pr_no)
     if diff.error then
         print("unable to load full diff: " .. diff.data)
@@ -114,7 +109,7 @@ local function save_full_diff_view(pr_no, _comments)
                 for _, c in pairs(pcomments) do --
                     local pos = c[1].position
                     -- position is nil if comment is old
-                    if pos then
+                    if pos ~= vim.NIL and pos ~= nil then
                         pos = pos + i + 4
                         -- save a reference to the line number in the diff to the uri
                         -- of the comment for keymappings.
@@ -160,18 +155,38 @@ local function load_pull_request(refreshing)
     if not refreshing then print("Done!") end
 end
 
--- TODO: add all these global functions to a return value
-
-function _G.PullsRefresh()
-    load_pull_request()
-end
-
 local function has_pr()
     if not pull_req then load_pull_request() end
     return pull_req ~= nil
 end
 
-function M.get_comments()
+function M.description()
+    if not has_pr() then
+        print("No PR")
+        return
+    end
+    local uri = views.create_uri("foo", "bar", pull_req.number, "description", "desc")
+    primary_view:show(uri, {split = true})
+end
+
+function M.tag_window()
+    -- tag a window and use it for any displays.
+    local win = vim.fn.win_getid()
+    primary_view:tag_window(win)
+end
+
+function M.untag_window()
+    primary_view:remove_tag()
+end
+
+function M.setup(cfg)
+    config = cfg or require("pulls.config")
+end
+function M.refresh()
+    load_pull_request()
+end
+
+function M.comments()
     if not has_pr() then
         print("No PR")
         return
@@ -187,12 +202,66 @@ function M.get_comment_chains()
     primary_view:show_qflist("comment_chains")
 end
 
+function M.diff()
+    if not has_pr() then
+        print("No PR")
+        return
+    end
+    local uri = views.create_uri("foo", "bar", pull_req.number, "diff", "full")
+    primary_view:show(uri, {split = true})
+end
+
+function M.list_changes()
+    if not has_pr() then
+        print("No PR")
+        return
+    end
+
+    -- for each file in diff_files, we want the first changes_by_line.line, and the diff, as well as the short_sha.
+
+    local entries = {}
+    for fname, changes in pairs(diff_files) do
+        for _, c in ipairs(changes.chunks) do
+            local row = {
+                filename = fname,
+                lnum = c.changes_by_line[1].line,
+                col = 0,
+                text = c.short_sha .. " | " .. c.diff_desc
+                --
+            }
+            table.insert(entries, row)
+        end
+    end
+
+    vim.fn.setqflist(entries, "r")
+    vim.cmd("copen")
+end
+
+function M.highlight_changes()
+    if not has_pr() then
+        print("No PR")
+        return
+    end
+
+    -- this diffs all files
+    local file = util.file_info()
+    local diff = nil
+    for f, d in pairs(diff_files) do if string.find(file.file, f) then diff = d end end
+
+    if diff == nil then
+        print("diff not found for file")
+        return
+    end
+
+    for _, f in ipairs(diff.chunks) do ui_signs.add(file.bufnr, f.changes_by_line) end
+end
+
 -- ugly state for submitting a comment. Use this as state to keep track of where the
 -- comment is being added to.
 -- { path, position }
 local comment_details = nil
 
-function M.diff_add_comment()
+function M.__internal.diff_add_comment()
     if not has_pr() then
         print("No PR")
         return
@@ -247,7 +316,7 @@ function M.diff_add_comment()
     if existing_comment then
         -- existing comment, go to chain
         -- Use PullsDiffShowComment since it sets up some environmentals
-        M.diff_show_comment()
+        M.__internal.diff_show_comment()
         -- primary_view:show(existing_comment)
     else
         -- new comment, opening input window.
@@ -257,7 +326,7 @@ function M.diff_add_comment()
     end
 end
 
-function M.submit_comment()
+function M.__internal.submit_comment()
     local lines = primary_view:get_msg_lines()
     if lines == nil then
         primary_view:remove_highlight_comment_line()
@@ -269,59 +338,7 @@ function M.submit_comment()
     if not resp.success then print("unable to post comment: " .. resp.body) end
     load_pull_request(true)
 end
-
-function M.diff()
-    if not has_pr() then
-        print("No PR")
-        return
-    end
-    local uri = views.create_uri("foo", "bar", pull_req.number, "diff", "full")
-    primary_view:show(uri, {split = true})
-end
-
--- function M.PullsViewFileDiff()
---     if not has_pr() then
---         print("No PR")
---         return
---     end
---     local path = vim.api.nvim_eval('fnamemodify(expand("%"), ":~:.")')
---     local uri = views.create_uri("foo", "bar", pull_req.number, "diff", path)
---     primary_view:show(uri, {split = true})
--- end
-
-function M.list_changes()
-    if not has_pr() then
-        print("No PR")
-        return
-    end
-    -- TODO: I wanted to get away from doing a diff in the file, but the comments
-    -- are placed on positons from diffs. That means the user needs to be able
-    -- to comment *on* a diff. So, to make a new comment,
-    -- the diff has to be loaded in a buffer and the user needs to be able to see
-    -- it and comment on it.
-    -- list changes in the quicklist
-
-    -- for each file in diff_files, we want the first changes_by_line.line, and the diff, as well as the short_sha.
-
-    local entries = {}
-    for fname, changes in pairs(diff_files) do
-        for _, c in ipairs(changes.chunks) do
-            local row = {
-                filename = fname,
-                lnum = c.changes_by_line[1].line,
-                col = 0,
-                text = c.short_sha .. " | " .. c.diff_desc
-                --
-            }
-            table.insert(entries, row)
-        end
-    end
-
-    vim.fn.setqflist(entries, "r")
-    vim.cmd("copen")
-end
-
-function M.diff_next()
+function M.__internal.diff_next()
     if not has_pr() then
         print("No PR")
         return
@@ -356,25 +373,6 @@ function M.diff_next()
     end
 end
 
-function M.highlight_changes()
-    if not has_pr() then
-        print("No PR")
-        return
-    end
-
-    -- this diffs all files
-    local file = util.file_info()
-    local diff = nil
-    for f, d in pairs(diff_files) do if string.find(file.file, f) then diff = d end end
-
-    if diff == nil then
-        print("diff not found for file")
-        return
-    end
-
-    for _, f in ipairs(diff.chunks) do ui_signs.add(file.bufnr, f.changes_by_line) end
-end
-
 function _G.PullsInfo()
     if not has_pr() then
         print("No PR")
@@ -384,7 +382,7 @@ function _G.PullsInfo()
     primary_view:debug()
 end
 
-function M.diff_show_comment()
+function M.__internal.diff_show_comment()
     if not has_pr() then
         print("No PR")
         return
@@ -414,7 +412,7 @@ local function create_resp_body(rows)
 end
 
 -- ReplyToComment will open the message box for a chain
-function M.reply_to_comment()
+function M.__internal.reply_to_comment()
     if not has_pr() then
         print("No PR")
         return
@@ -422,7 +420,7 @@ function M.reply_to_comment()
     primary_view:show_input("reply_comment")
 end
 
-function M.submit_reply()
+function M.__internal.submit_reply()
     if not has_pr() then
         print("No PR")
         return
@@ -452,7 +450,7 @@ function M.submit_reply()
 end
 
 -- go to the next line that has a comment in the full diff Use the stringified lines in diff_comment_refs to get the next largest one.
-function M.diff_next_comment()
+function M.__internal.diff_next_comment()
     if not has_pr() then
         print("No PR")
         return
@@ -474,7 +472,8 @@ function M.diff_next_comment()
     vim.api.nvim_win_set_cursor(0, {next_comment_line, 0})
 end
 
-function M.diff_go_to_file()
+-- if do_preview is true, the cursor will hop back to the original window after opening.
+function M.__internal.diff_go_to_file(do_preview)
     if not has_pr() then
         print("No PR")
         return
@@ -500,31 +499,16 @@ function M.diff_go_to_file()
         return
     end
 
+    local current_win = vim.api.nvim_get_current_win()
+    if do_preview then
+        local w = primary_view:tagged_window()
+        if w then vim.api.nvim_set_current_win(w) end
+    end
+
     vim.api.nvim_command(":e " .. found.path)
     vim.api.nvim_win_set_cursor(0, {found.file_line, 0})
-end
 
-function M.description()
-    if not has_pr() then
-        print("No PR")
-        return
-    end
-    local uri = views.create_uri("foo", "bar", pull_req.number, "description", "desc")
-    primary_view:show(uri, {split = true})
-end
-
-function M.tag_window()
-    -- tag a window and use it for any displays.
-    local win = vim.fn.win_getid()
-    primary_view:tag_window(win)
-end
-
-function M.untag_window()
-    primary_view:remove_tag()
-end
-
-function M.setup(cfg)
-    config = cfg or require("pulls.config")
+    if do_preview then vim.api.nvim_set_current_win(current_win) end
 end
 
 return M

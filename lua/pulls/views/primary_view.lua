@@ -81,6 +81,10 @@ function View:set_view_signs(uri, signs)
     ui_signs.add(buf, signs)
 end
 
+local function call(fn)
+    return ":lua require('pulls').__internal." .. fn .. "<CR>"
+end
+
 -- set_view will (re)set (and save) a view, where it can be referenced via uri again.
 function View:set_view(type, uri, content, config)
     local buf = self.buffers[uri]
@@ -97,7 +101,6 @@ function View:set_view(type, uri, content, config)
     api.nvim_buf_set_option(buf, 'swapfile', false)
     api.nvim_buf_set_option(buf, 'filetype', 'markdown')
     api.nvim_buf_set_option(buf, "modifiable", config.modifiable or false)
-    --
 
     if type == "diff" then
         api.nvim_buf_set_option(buf, 'filetype', 'diff')
@@ -106,25 +109,30 @@ function View:set_view(type, uri, content, config)
         api.nvim_buf_set_option(buf, 'filetype', 'diff')
         local m = self.config.mappings.diff
         local opt = {noremap = true}
-        api.nvim_buf_set_keymap(buf, "n", m.show_comment, ":lua require('pulls').diff_show_comment()<CR>", opt)
-        api.nvim_buf_set_keymap(buf, "n", m.next_comment, ":lua require('pulls').diff_next_comment()<CR>", opt)
-        api.nvim_buf_set_keymap(buf, "n", m.goto_file, ":lua require('pulls').diff_go_to_file()<CR>", opt)
-        api.nvim_buf_set_keymap(buf, "n", m.add_comment, ":lua require('pulls').diff_add_comment()<CR>", opt)
+        api.nvim_buf_set_keymap(buf, "n", m.show_comment, call("diff_show_comment()"), opt)
+        api.nvim_buf_set_keymap(buf, "n", m.next_comment, call("diff_next_comment()"), opt)
+        api.nvim_buf_set_keymap(buf, "n", m.next_hunk, call("diff_next()"), opt)
+        api.nvim_buf_set_keymap(buf, "n", m.goto_file, call("diff_go_to_file(false)"), opt)
+        api.nvim_buf_set_keymap(buf, "n", m.preview_file, call("diff_go_to_file(true)"), opt)
+        api.nvim_buf_set_keymap(buf, "n", m.add_comment, call("diff_add_comment()"), opt)
     elseif type == "description" then
         api.nvim_buf_set_name(buf, "Description")
-        -- TODO: Edit description
     elseif type == "comment" then
         if not config.id then
             print("Need an id in config for comment")
             return
         end
         api.nvim_buf_set_name(buf, string.format("Comment %s", tostring(config.id)))
-        api.nvim_buf_set_keymap(buf, "n", "cc", ":lua require('pulls').reply_to_comment()<CR>", {noremap = true})
+        api.nvim_buf_set_keymap(buf, "n", "cc", call("reply_to_comment()"), {noremap = true})
     else
         print("not sure what to do with type " .. type)
     end
 
     return buf
+end
+
+function View:tagged_window()
+    return self.display_win
 end
 
 function View:debug()
@@ -153,7 +161,9 @@ function View:show(uri, options)
 
     local win = 0
     -- use the tagged window if it exists.
-    if self.display_win ~= nil and api.nvim_win_is_valid(self.display_win) then win = self.display_win end
+    if self.display_win ~= nil and api.nvim_win_is_valid(self.display_win) then --
+        win = self.display_win
+    end
     api.nvim_win_set_buf(win, buf)
 end
 
@@ -207,7 +217,16 @@ function View:show_input(type, content, config)
 
     if self.msg_win == nil or not api.nvim_buf_is_loaded(self.msg_buf) then --
         api.nvim_command('rightbelow new')
+    else
+        print("msg_win is valid")
+        print(self.msg_win)
     end
+
+    api.nvim_buf_attach(self.msg_buf, true, { --
+        on_detach = function(_, _)
+            self:hide_input()
+        end
+    })
     if res ~= nil then api.nvim_command("res " .. res) end
     if self.msg_win == nil or not api.nvim_win_is_valid(self.msg_win) then --
         self.msg_win = api.nvim_get_current_win()
@@ -226,10 +245,10 @@ function View:show_input(type, content, config)
     local opt = {noremap = true}
 
     if type == "new_comment" then
-        api.nvim_buf_set_keymap(self.msg_buf, "n", m.submit, ":lua require('pulls').submit_comment()<CR>", opt)
+        api.nvim_buf_set_keymap(self.msg_buf, "n", m.submit, ":lua require('pulls').__internal.submit_comment()<CR>", opt)
         api.nvim_buf_set_name(self.msg_buf, "New Comment")
     elseif type == "reply_comment" then
-        api.nvim_buf_set_keymap(self.msg_buf, "n", m.submit, ":lua require('pulls').submit_reply()<CR>", opt)
+        api.nvim_buf_set_keymap(self.msg_buf, "n", m.submit, ":lua require('pulls').__internal.submit_reply()<CR>", opt)
         api.nvim_buf_set_name(self.msg_buf, "Reply")
 
     end
@@ -246,8 +265,10 @@ function View:get_msg_lines()
 end
 
 function View:hide_input()
-    api.nvim_win_close(self.msg_win, false)
+    self:remove_highlight_comment_line()
     if self:input_loaded() then api.nvim_buf_delete(self.msg_buf, {}) end
+    self.msg_win = nil
+    self.msg_buf = nil
 end
 
 return View
