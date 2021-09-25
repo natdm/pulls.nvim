@@ -135,13 +135,13 @@ local function save_full_diff_view(pr_no, _comments)
 end
 
 local function save_reviews(pull_req_no)
-    local reviews = api.get_reviews(pull_req_no)
+    local reviews = api.get_all_review_comments(pull_req_no)
     if not reviews.success then
         print("unable to get reviews: " .. reviews.error)
         return
     end
+    print(vim.inspect(reviews.data))
 
-    
     -- NOTE:
     -- Reviews some times have a `body` field, but some times do not. Do they have diffs?
     -- They should always have relating `/comments`, which will have diffs and bodies.
