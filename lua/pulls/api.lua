@@ -23,6 +23,10 @@ function M.description_edit(pull_req_no, body)
     return github.update_pull_requests(pull_req_no, {body = body})
 end
 
+function M.description_edit_title(pull_req_no, title)
+    return github.update_pull_requests(pull_req_no, {title = title})
+end
+
 -- full diff for PR
 function M.diff(pull_req_no)
     return github.get_pull_request_diff(pull_req_no)

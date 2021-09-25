@@ -140,6 +140,8 @@ local function save_reviews(pull_req_no)
         print("unable to get reviews: " .. reviews.error)
         return
     end
+
+    
     -- NOTE:
     -- Reviews some times have a `body` field, but some times do not. Do they have diffs?
     -- They should always have relating `/comments`, which will have diffs and bodies.
@@ -162,6 +164,7 @@ local function load_pull_request(refreshing)
     save_desc_view(pull_req)
     save_full_diff_view(pull_req.number, comments.data)
     save_comment_chains(comments.data)
+    save_reviews(pull_req.number)
     if not refreshing then print("Done!") end
 end
 
@@ -348,6 +351,7 @@ function M.__internal.submit_comment()
     if not resp.success then print("unable to post comment: " .. (resp.error or "<nil>")) end
     load_pull_request(true)
 end
+
 function M.__internal.diff_next()
     if not has_pr() then
         print("No PR")
