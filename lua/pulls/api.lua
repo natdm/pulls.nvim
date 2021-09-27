@@ -104,6 +104,23 @@ function M.get_review_comments(pr_no, review_id)
     return github.get_review_comments(pr_no, review_id)
 end
 
+function M.get_issue_comments(pr_no)
+    return github.get_issue_comments(pr_no)
+end
+
+function M.comments(pr_no)
+    local reviews = github.get_reviews(pr_no)
+    if not reviews.success then return reviews end
+
+    local comments = github.get_comments(pr_no)
+    if not comments.success then return comments end
+
+    local issues = github.get_issue_comments(pr_no)
+    if not issues.success then return issues end
+
+    return {issues = issues.data, comments = comments.data, reviews = reviews.data}
+end
+
 -- this will get all reviews, then all comments for reviews, format the coments, and add
 -- them as a "comments" key under the original review.
 --

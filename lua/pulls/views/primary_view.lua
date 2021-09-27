@@ -51,7 +51,7 @@ end
 -- returns 0 on error
 function View:get_buffer(type, config)
     local name = config.name or "-"
-    local uri = self.create_uri(self.pr_number, type. name)
+    local uri = self.create_uri(self.pr_number, type, name)
     local buftype = config.buftype or 'nofile'
     local filetype = config.filetype or 'txt'
     local buf = self.buffers[uri]
@@ -69,6 +69,10 @@ function View:get_buffer(type, config)
     return buf
 end
 
+function View:get_bufnr(uri)
+    return self.buffers[uri]
+end
+
 function View.create_comment_uri(path, line)
     return string.format("%s:%s", path, line)
 end
@@ -83,6 +87,7 @@ function View:set_view_signs(uri, signs)
 end
 
 local function call(fn)
+	-- helper to call an internal function in the main module.
     return ":lua require('pulls').__internal." .. fn .. "<CR>"
 end
 
@@ -126,8 +131,14 @@ function View:set_view(type, uri, content, config)
             print("Need an id in config for comment")
             return
         end
-        api.nvim_buf_set_name(buf, string.format("Comment %s", tostring(config.id)))
+        api.nvim_buf_set_name(buf, string.format("Comment %i", config.id))
         api.nvim_buf_set_keymap(buf, "n", "cc", call("reply_to_comment()"), {noremap = true})
+    elseif type == "issue" then
+        if not config.id then
+            print("Need an id in config for issue")
+            return
+        end
+        api.nvim_buf_set_name(buf, string.format("Issue %s", config.id))
     else
         print("not sure what to do with type " .. type)
     end

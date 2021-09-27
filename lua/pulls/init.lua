@@ -9,10 +9,8 @@ local M = {__internal = {}}
 
 local config = {}
 
-local comments = {}
 local comment_id = nil
 local pull_req = nil
-local pull_req_files = nil -- just the api response, no real parsing
 
 -- pulls_win and pulls_buf should be where *any* of the diffs or comment chains go. As well as
 -- any reviews, descriptions, etc -- keep it to one window so it's easy to navigate and control.
@@ -30,11 +28,11 @@ local diff_comment_refs = {}
 
 local comment_buffer_id_to_comment_id = {}
 
-local function save_comment_chains(_comments)
+local function save_comment_chains(comments)
     -- save all comment chains in buffers, and then preload a qflist with the buffers
     local comment_buffer_qf = {}
     local comment_line_ref_qf = {}
-    for fpath, c in pairs(_comments) do -- file level
+    for fpath, c in pairs(comments) do -- file level
         for line, chain in pairs(c) do -- line level (chain)
             local list = {}
             table.insert(list, #list + 1, "```diff")
@@ -74,6 +72,114 @@ local function save_comment_chains(_comments)
     primary_view:save_qflist("comments", comment_line_ref_qf)
 end
 
+local function save_code_comments(comments)
+    local code_comments_qf = {}
+    local latest_code_comments = {}
+
+    for _, c in ipairs(comments) do
+        local k = c.path .. tostring(c.line)
+        local latest = latest_code_comments[k]
+        if latest == nil then
+            latest_code_comments[k] = c
+        elseif latest.id < c.id then
+            latest_code_comments[k] = c
+        end
+    end
+
+    for _, c in pairs(comments) do
+        table.insert(code_comments_qf, { --
+            lnum = c.line,
+            filename = c.path,
+            text = string.format("%s: %s", c.user.login, c.body)
+        })
+    end
+
+    primary_view:save_qflist("code_comments", code_comments_qf)
+end
+
+local function save_issue_views(issues)
+    local qflist = {}
+    for _, issue in ipairs(issues) do
+        local body = util.split_newlines(issue.body)
+        local uri = views.create_uri(pull_req.number, "issue", tostring(issue.id))
+        local buf = primary_view:set_view("issue", uri, body, {id = issue.id})
+        table.insert(qflist, {bufnr = buf, lnum = 1, text = string.format("%s: %s", issue.user.login, body[1])})
+    end
+    primary_view:save_qflist("issues", qflist)
+end
+
+local function save_review_view(review)
+    -- print(vim.inspect(review))
+    local lines = {}
+    table.insert(lines, string.format("## %s left a review:", review.user.login))
+    if review.body ~= "" then
+        table.insert(lines, string.format("*Commented on %s*", review.submitted_at)) -- TODO: Add edited flag (created_at < updated_at)
+        for _, b in ipairs(util.split_newlines(review.body)) do table.insert(lines, string.format("> %s<br>", b)) end
+    end
+
+    for _, c in pairs(review.comments) do --
+        table.insert(lines, string.format("### %s", c.path))
+        table.insert(lines, "```diff")
+        for _, d in ipairs(util.split_newlines(c.diff_hunk)) do table.insert(lines, d) end
+        table.insert(lines, "```")
+        table.insert(lines, string.format("> %s at %s:<br>", c.user.login, c.created_at))
+        for _, l in ipairs(util.split_newlines(c.body)) do table.insert(lines, string.format("> %s<br>", l)) end
+        if c.replies then
+            for _, r in ipairs(c.replies) do
+                table.insert(lines, string.format("> %s at %s:<br>", r.user.login, r.created_at))
+                for _, b in ipairs(util.split_newlines(r.body)) do table.insert(lines, string.format("> %s<br>", b)) end
+            end
+        end
+    end
+    for _, l in ipairs(lines) do print(l) end
+end
+
+local function save_review_views(reviews, comments)
+    local review_indexes = {} -- review id to index
+    for i, r in ipairs(reviews) do
+        review_indexes[tostring(r.id)] = i
+        r.comments = {}
+    end
+
+    -- reviews could have comments, or not have comments. The comments that they may
+    -- have might show an `in_reply_to_id`, indicating the comment chain they are on.
+    --
+    -- Reviews won't have diffs, but the comments are guaranteed to have diffs.
+    --
+    -- Build a table with..
+    -- {review..., comments: {[id]: {..., replies: {{...}}}}}
+
+    -- first loop to get all the comments that don't have an in_reply_to_id field and store
+    -- them in the review.
+
+    -- apparently the pull_request_review_id in replies is not correct? So we need to save the
+    -- comment id and point it to the review index so we know which one to grab.
+    local comment_id_to_review_index = {}
+
+    for _, c in ipairs(comments) do
+        if not c.in_reply_to_id then
+            reviews[review_indexes[tostring(c.pull_request_review_id)]].comments[tostring(c.id)] = c
+            comment_id_to_review_index[tostring(c.id)] = review_indexes[tostring(c.pull_request_review_id)]
+        end
+    end
+
+    for _, c in ipairs(comments) do
+        if c.in_reply_to_id then
+            local idx = comment_id_to_review_index[tostring(c.in_reply_to_id)]
+            local thread = reviews[idx].comments[tostring(c.in_reply_to_id)]
+            if not thread.replies then
+                thread.replies = {c}
+            else
+                table.insert(thread.replies, c)
+            end
+        end
+    end
+
+    for _, r in ipairs(reviews) do save_review_view(r) end
+
+    -- Some reviews are just wrappers around a comment chain. Those got placed immediately.
+end
+
 local function save_desc_view(_pull_req)
     local desc = util.split_newlines(_pull_req.body)
     local uri = views.create_uri(pull_req.number, "description", "desc")
@@ -84,68 +190,9 @@ end
 -- {{line = n, path = p}, {..}, ..}
 local diff_chunk_start_lines = {}
 
-local function save_full_diff_view(pr_no, _comments)
-    local diff = api.diff(pr_no)
-    if diff.error then
-        print("unable to load full diff: " .. diff.data)
-        return
-    end
-
-    local diff_comment_signs = {}
-
-    local diff_lines = util.split_newlines(diff.data)
-    for i, line in ipairs(diff_lines) do --
-        local add_start = nil
-        if vim.startswith(line, "diff") then --
-            local _, _, _, _, add_start_s, add_ct_s = string.find(diff_lines[i + 4], "@@ %-(%d+),(%d+) %+(%d+),(%d+) @@")
-            add_start = tonumber(add_start_s)
-            local path = line:match(".*%sb/(.*)") -- match the diff --git a/.. b/(..)
-            local pcomments = _comments[path]
-            -- pcomments are per line, but we will need position. Iterate all of them,
-            -- ignoring the line, and using the position.
-            -- the math should always be the comment position + the line (i) where the
-            -- header is plus 4, due to the diff file format
-            if pcomments then
-                for _, c in pairs(pcomments) do --
-                    local pos = c[1].position
-                    -- position is nil if comment is old
-                    if pos ~= vim.NIL and pos ~= nil then
-                        pos = pos + i + 4
-                        -- save a reference to the line number in the diff to the uri
-                        -- of the comment for keymappings.
-                        local comment_uri = views.create_comment_uri(c[1].path, tostring(c[1].original_line))
-                        diff_comment_refs[tostring(pos)] = comment_uri
-                        table.insert(diff_comment_signs, {action = "comment", line = pos, count = #c})
-                    end
-                end
-            end
-            -- BUG: This isn't very exact as to where it goes. Ideally, it'd go to the file, at the place where you have yoour cursor.
-            table.insert(diff_chunk_start_lines, { --
-                diff_line = i,
-                path = path,
-                file_line = add_start
-            })
-
-        end
-    end
-
+local function save_full_diff_view(diff_lines)
     local uri = views.create_uri(pull_req.number, "diff", "full")
     primary_view:set_view("full_diff", uri, diff_lines, {})
-    primary_view:set_view_signs(uri, diff_comment_signs)
-end
-
-local function save_reviews(pull_req_no)
-    local reviews = api.get_all_review_comments(pull_req_no)
-    if not reviews.success then
-        print("unable to get reviews: " .. reviews.error)
-        return
-    end
-    print(vim.inspect(reviews.data))
-
-    -- NOTE:
-    -- Reviews some times have a `body` field, but some times do not. Do they have diffs?
-    -- They should always have relating `/comments`, which will have diffs and bodies.
-    -- How do we want to show these in an intuitie way?
 end
 
 local function load_pull_request(refreshing)
@@ -155,16 +202,29 @@ local function load_pull_request(refreshing)
         print("No pull request found")
         return
     end
-    pull_req = pulls[1]
 
+    pull_req = pulls[1]
     if not primary_view then primary_view = views:new(pull_req.number, config) end
-    comments = api.comments_for_pull(pull_req.number)
-    pull_req_files = api.files_for_pull(pull_req.number)
+
+    local diff = api.diff(pull_req.number)
+    if diff.error then
+        print("unable to load full diff: " .. diff.error)
+        return
+    end
+
+    local diff_lines = util.split_newlines(diff.data)
+
+    local comments = api.comments(pull_req.number)
+
+    local pull_req_files = api.files_for_pull(pull_req.number)
     if pull_req_files ~= nil then diff_files = differ.diff(pull_req_files.data) end
     save_desc_view(pull_req)
-    save_full_diff_view(pull_req.number, comments.data)
-    save_comment_chains(comments.data)
-    save_reviews(pull_req.number)
+    save_full_diff_view(diff_lines)
+    save_code_comments(comments.comments)
+    save_issue_views(comments.issues)
+    save_review_views(comments.reviews, comments.comments)
+    -- save_comment_chains(comments.data)
+    -- save_reviews(pull_req.number)
     if not refreshing then print("Done!") end
 end
 
@@ -180,6 +240,14 @@ function M.description()
     end
     local uri = views.create_uri(pull_req.number, "description", "desc")
     primary_view:show(uri, {split = true})
+end
+
+function M.issues()
+    if not has_pr() then
+        print("No PR")
+        return
+    end
+    primary_view:show_qflist("issues")
 end
 
 function M.tag_window()
@@ -207,12 +275,12 @@ function M.comments()
     primary_view:show_qflist("comments")
 end
 
-function M.get_comment_chains()
+function M.code_comments()
     if not has_pr() then
         print("No PR")
         return
     end
-    primary_view:show_qflist("comment_chains")
+    primary_view:show_qflist("code_comments")
 end
 
 function M.diff()
