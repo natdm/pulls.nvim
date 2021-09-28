@@ -90,6 +90,8 @@ local function create_review_view(review)
     return lines
 end
 
+local review_file_pos = {}
+
 local function save_review_views(reviews, comments)
     local review_indexes = {} -- review id to index
     for i, r in ipairs(reviews) do
@@ -132,10 +134,15 @@ local function save_review_views(reviews, comments)
     end
 
     local reviews_qf = {}
+
     for _, r in ipairs(reviews) do
         local tableempty = true
         for _ in pairs(r.comments) do tableempty = false end
         if r.body == "" and tableempty then goto continue end
+
+        -- set the global review location for go-to-file capability.
+        for _, c in pairs(r.comments) do review_file_pos[r.id] = {path = c.path, line = c.line} end
+
         local lines = create_review_view(r)
         local uri = primary_view.create_uri(pull_req.number, "review", tostring(r.id))
         local buf = primary_view:set_view("review", uri, lines, {})
@@ -169,7 +176,7 @@ local comment_id_pos = {}
 
 local review_id_diff_pos = {} -- review id to file diff pos
 
-local function save_full_diff_view(diff_lines, comments)
+local function save_diff_view(diff_lines, comments)
     -- TODO: save comment review ID's to actual review ID's and their pos on the diff.
     local uri = views.create_uri(pull_req.number, "diff", "full")
     primary_view:set_view("full_diff", uri, diff_lines, {})
@@ -243,7 +250,7 @@ local function load_pull_request(refreshing)
     if pull_req_files ~= nil then diff_files = differ.diff(pull_req_files.data) end
     save_desc_view(pull_req)
     save_review_views(comments.reviews, comments.comments)
-    save_full_diff_view(diff_lines, comments.comments)
+    save_diff_view(diff_lines, comments.comments)
     save_code_comments(comments.comments)
     save_issue_views(comments.issues)
     save_review_views(comments.reviews, comments.comments)
@@ -546,7 +553,7 @@ function M.__internal.submit_reply()
     local comment = create_resp_body(content)
 
     comment = table.concat(comment, '\r\n')
-    -- comment = vim.fn.escape(comment, [["\]]) -- does this even do anything
+
     local response = api.reply(pull_req.number, comment_id, comment)
     if response.success ~= true then
         print(response.error)
@@ -586,26 +593,30 @@ function M.__internal.diff_go_to_file(do_preview)
         print("No PR")
         return
     end
+
     local name = vim.api.nvim_buf_get_name(0)
     if not vim.endswith(name, "Diff") then
         print("not on full diff")
         return
     end
+
     local line = vim.fn.line(".")
-    local found = nil
-    for _, f in ipairs(diff_chunk_start_lines) do
-        if f.diff_line <= line then --
-            if not found then
-                found = f
-            elseif found.diff_line < f.diff_line then
-                found = f
-            end
-        end
-    end
-    if not found then
-        print("unable to find file")
+    print(line)
+
+    -- use the line to grab the review_id_diff_pos then use that review id to grab the review_file_pos
+    local review_id = review_id_diff_pos[line]
+    if review_id == nil then
+        print("no review id for line " .. line)
         return
     end
+    print(vim.inspect(review_id_diff_pos))
+
+    local found = review_file_pos[review_id]
+    if found == nil then
+        print("no file id for review " .. review_id)
+        return
+    end
+    print(vim.inspect(found))
 
     local current_win = vim.api.nvim_get_current_win()
     if do_preview then
@@ -614,7 +625,7 @@ function M.__internal.diff_go_to_file(do_preview)
     end
 
     vim.api.nvim_command(":e " .. found.path)
-    vim.api.nvim_win_set_cursor(0, {found.file_line, 0})
+    vim.api.nvim_win_set_cursor(0, {found.line, 0})
 
     if do_preview then vim.api.nvim_set_current_win(current_win) end
 end
