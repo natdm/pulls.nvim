@@ -87,7 +87,7 @@ function View:set_view_signs(uri, signs)
 end
 
 local function call(fn)
-	-- helper to call an internal function in the main module.
+    -- helper to call an internal function in the main module.
     return ":lua require('pulls').__internal." .. fn .. "<CR>"
 end
 
@@ -100,7 +100,7 @@ function View:set_view(type, uri, content, config)
     api.nvim_buf_set_option(buf, "modifiable", true)
 
     vim.api.nvim_buf_set_name(buf, uri)
-    if content ~= nil then api.nvim_buf_set_lines(buf, 0, -1, false, content) end
+    if content ~= nil then api.nvim_buf_set_lines(buf, 0, -1, true, content) end
 
     -- "default" settings, toggle in each if to change
     api.nvim_buf_set_option(buf, 'buftype', 'nofile')
@@ -126,6 +126,8 @@ function View:set_view(type, uri, content, config)
         local m = self.config.mappings.description
         local opt = {noremap = true, silent = true}
         api.nvim_buf_set_keymap(buf, "n", m.edit, call("description_edit()"), opt)
+    elseif type == "review" then
+        -- TODO
     elseif type == "comment" then
         if not config.id then
             print("Need an id in config for comment")

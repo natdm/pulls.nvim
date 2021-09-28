@@ -157,4 +157,8 @@ function M.diff(files)
     return entries
 end
 
+function M.parse_diff_command(cmd)
+	return cmd:match("diff %-%-git a/(.+) b/(.+)")
+end
+
 return M

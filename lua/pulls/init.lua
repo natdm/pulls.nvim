@@ -28,50 +28,6 @@ local diff_comment_refs = {}
 
 local comment_buffer_id_to_comment_id = {}
 
-local function save_comment_chains(comments)
-    -- save all comment chains in buffers, and then preload a qflist with the buffers
-    local comment_buffer_qf = {}
-    local comment_line_ref_qf = {}
-    for fpath, c in pairs(comments) do -- file level
-        for line, chain in pairs(c) do -- line level (chain)
-            local list = {}
-            table.insert(list, #list + 1, "```diff")
-            for s in chain[1].diff_hunk:gmatch("[^\r\n]+") do table.insert(list, s) end
-            table.insert(list, #list + 1, "```")
-            -- TODO: Use nvim_win_get_width here, and repeat '-'
-            table.insert(list, #list + 1, "________________________________________________")
-            -- line number to comment, ignoring line no since we are loading a qflist that goes
-            -- to a comment chain.
-            for _, cc in ipairs(chain) do
-                table.insert(list, #list + 1, "From: " .. cc.user)
-                table.insert(list, #list + 1, "Date: " .. cc.created_at)
-                table.insert(list, #list + 1, "----------------------------")
-                for s in cc.body:gmatch("[^\r\n]+") do table.insert(list, s) end
-                table.insert(list, #list + 1, "")
-                table.insert(list, #list + 1, "________________________________________________")
-            end
-            local uri = views.create_comment_uri(fpath, line)
-            local buf = primary_view:set_view("comment", uri, list, {id = chain[1].id})
-            if not buf then
-                print("unable to save comment view")
-                return
-            end
-            -- set this for easier replies later
-            comment_buffer_id_to_comment_id[buf] = chain[1].id
-            table.insert(comment_buffer_qf, {bufnr = buf, lnum = 0, text = chain[#chain].preview})
-            local cline = chain[1].line
-            local flag = ""
-            if not cline then
-                flag = "[outdated] "
-                cline = chain[1].original_line
-            end
-            table.insert(comment_line_ref_qf, {filename = fpath, lnum = cline, text = flag .. chain[#chain].preview})
-        end
-    end
-    primary_view:save_qflist("comment_chains", comment_buffer_qf)
-    primary_view:save_qflist("comments", comment_line_ref_qf)
-end
-
 local function save_code_comments(comments)
     local code_comments_qf = {}
     local latest_code_comments = {}
@@ -108,9 +64,9 @@ local function save_issue_views(issues)
     primary_view:save_qflist("issues", qflist)
 end
 
-local function save_review_view(review)
-    -- print(vim.inspect(review))
+local function create_review_view(review)
     local lines = {}
+
     table.insert(lines, string.format("## %s left a review:", review.user.login))
     if review.body ~= "" then
         table.insert(lines, string.format("*Commented on %s*", review.submitted_at)) -- TODO: Add edited flag (created_at < updated_at)
@@ -118,20 +74,25 @@ local function save_review_view(review)
     end
 
     for _, c in pairs(review.comments) do --
+        table.insert(lines, "")
         table.insert(lines, string.format("### %s", c.path))
         table.insert(lines, "```diff")
         for _, d in ipairs(util.split_newlines(c.diff_hunk)) do table.insert(lines, d) end
         table.insert(lines, "```")
-        table.insert(lines, string.format("> %s at %s:<br>", c.user.login, c.created_at))
+        table.insert(lines, "")
+        table.insert(lines, string.format("> _*%s* at %s_:<br>", c.user.login, c.created_at))
         for _, l in ipairs(util.split_newlines(c.body)) do table.insert(lines, string.format("> %s<br>", l)) end
         if c.replies then
+            table.insert(lines, "")
             for _, r in ipairs(c.replies) do
                 table.insert(lines, string.format("> %s at %s:<br>", r.user.login, r.created_at))
                 for _, b in ipairs(util.split_newlines(r.body)) do table.insert(lines, string.format("> %s<br>", b)) end
+                table.insert(lines, "")
             end
         end
+        table.insert(lines, "")
     end
-    for _, l in ipairs(lines) do print(l) end
+    return lines
 end
 
 local function save_review_views(reviews, comments)
@@ -175,7 +136,25 @@ local function save_review_views(reviews, comments)
         end
     end
 
-    for _, r in ipairs(reviews) do save_review_view(r) end
+    local reviews_qf = {}
+    for _, r in ipairs(reviews) do
+        local tableempty = true
+        for _ in pairs(r.comments) do tableempty = false end
+        if r.body == "" and tableempty then goto continue end
+        local lines = create_review_view(r)
+        local uri = primary_view.create_uri("review", tostring(r.id))
+        local buf = primary_view:set_view("review", uri, lines, {})
+        local preview = ""
+        if r.body ~= "" then
+            preview = string.format("%s: [%s] %s", r.user.login, r.state, util.split_newlines(r.body)[1])
+        else
+            for _, c in pairs(r.comments) do preview = string.format("%s: [%s] %s", r.user.login, r.state, util.split_newlines(c.body)[1]) end
+        end
+        table.insert(reviews_qf, {bufnr = buf, lnum = 1, text = preview})
+        ::continue::
+    end
+
+    primary_view:save_qflist("reviews", reviews_qf)
 
     -- Some reviews are just wrappers around a comment chain. Those got placed immediately.
 end
@@ -190,9 +169,50 @@ end
 -- {{line = n, path = p}, {..}, ..}
 local diff_chunk_start_lines = {}
 
-local function save_full_diff_view(diff_lines)
+local function save_full_diff_view(diff_lines, comments)
     local uri = views.create_uri(pull_req.number, "diff", "full")
     primary_view:set_view("full_diff", uri, diff_lines, {})
+
+    -- get file positions in diff for the relative positions of the comments
+    local file_idx = {}
+    for k, v in pairs(diff_lines) do
+        if vim.startswith(v, "diff --git") then -- 
+            -- left and right side files in diff --git
+            local _, b = differ.parse_diff_command(v)
+            file_idx[b] = k + 4 -- 4 is the space between the comand and the diff hunk
+        end
+    end
+
+
+    local comment_counts = {}
+    for _, c in ipairs(comments) do
+        local record = {}
+        if c.position == vim.NIL then
+            record = {line = file_idx[c.path] + c.original_position, action = "comment_outdated", count = 1}
+        else
+            record = {line = file_idx[c.path] + c.position, action = "comment", count = 1}
+        end
+
+        if c.in_reply_to_id ~= nil then
+            local cc = comment_counts[c.in_reply_to_id]
+            if cc == nil then
+                comment_counts[c.in_reply_to_id] = record
+            else
+                cc.count = cc.count + 1
+            end
+        else
+            local cc = comment_counts[c.id]
+            if cc == nil then
+                comment_counts[c.id] = record
+            else
+                cc.count = cc.count + 1
+            end
+        end
+    end
+
+    local signs = {}
+    for _, v in pairs(comment_counts) do table.insert(signs, v) end
+    primary_view:set_view_signs(uri, signs)
 end
 
 local function load_pull_request(refreshing)
@@ -219,7 +239,7 @@ local function load_pull_request(refreshing)
     local pull_req_files = api.files_for_pull(pull_req.number)
     if pull_req_files ~= nil then diff_files = differ.diff(pull_req_files.data) end
     save_desc_view(pull_req)
-    save_full_diff_view(diff_lines)
+    save_full_diff_view(diff_lines, comments.comments)
     save_code_comments(comments.comments)
     save_issue_views(comments.issues)
     save_review_views(comments.reviews, comments.comments)
@@ -275,6 +295,14 @@ function M.comments()
     primary_view:show_qflist("comments")
 end
 
+function M.reviews()
+    if not has_pr() then
+        print("No PR")
+        return
+    end
+    primary_view:show_qflist("reviews")
+end
+
 function M.code_comments()
     if not has_pr() then
         print("No PR")
@@ -289,7 +317,7 @@ function M.diff()
         return
     end
     local uri = views.create_uri(pull_req.number, "diff", "full")
-    primary_view:show(uri, {split = true})
+    primary_view:show(uri, {})
 end
 
 function M.list_changes()
