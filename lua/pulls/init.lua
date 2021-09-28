@@ -23,11 +23,6 @@ local diff_files = nil
 
 local primary_view = nil
 
--- full diff line number to comment uri for comment chain
-local diff_comment_refs = {}
-
-local comment_buffer_id_to_comment_id = {}
-
 local function save_code_comments(comments)
     local code_comments_qf = {}
     local latest_code_comments = {}
@@ -142,21 +137,22 @@ local function save_review_views(reviews, comments)
         for _ in pairs(r.comments) do tableempty = false end
         if r.body == "" and tableempty then goto continue end
         local lines = create_review_view(r)
-        local uri = primary_view.create_uri("review", tostring(r.id))
+        local uri = primary_view.create_uri(pull_req.number, "review", tostring(r.id))
         local buf = primary_view:set_view("review", uri, lines, {})
         local preview = ""
         if r.body ~= "" then
             preview = string.format("%s: [%s] %s", r.user.login, r.state, util.split_newlines(r.body)[1])
         else
-            for _, c in pairs(r.comments) do preview = string.format("%s: [%s] %s", r.user.login, r.state, util.split_newlines(c.body)[1]) end
+            for _, c in pairs(r.comments) do
+                -- save the comment to review relation since the API is incorrect.
+                preview = string.format("%s: [%s] %s", r.user.login, r.state, util.split_newlines(c.body)[1])
+            end
         end
         table.insert(reviews_qf, {bufnr = buf, lnum = 1, text = preview})
         ::continue::
     end
 
     primary_view:save_qflist("reviews", reviews_qf)
-
-    -- Some reviews are just wrappers around a comment chain. Those got placed immediately.
 end
 
 local function save_desc_view(_pull_req)
@@ -169,20 +165,24 @@ end
 -- {{line = n, path = p}, {..}, ..}
 local diff_chunk_start_lines = {}
 
+local comment_id_pos = {}
+
+local review_id_diff_pos = {} -- review id to file diff pos
+
 local function save_full_diff_view(diff_lines, comments)
+    -- TODO: save comment review ID's to actual review ID's and their pos on the diff.
     local uri = views.create_uri(pull_req.number, "diff", "full")
     primary_view:set_view("full_diff", uri, diff_lines, {})
 
     -- get file positions in diff for the relative positions of the comments
     local file_idx = {}
     for k, v in pairs(diff_lines) do
-        if vim.startswith(v, "diff --git") then -- 
+        if vim.startswith(v, "diff --git") then
             -- left and right side files in diff --git
             local _, b = differ.parse_diff_command(v)
             file_idx[b] = k + 4 -- 4 is the space between the comand and the diff hunk
         end
     end
-
 
     local comment_counts = {}
     for _, c in ipairs(comments) do
@@ -197,6 +197,7 @@ local function save_full_diff_view(diff_lines, comments)
             local cc = comment_counts[c.in_reply_to_id]
             if cc == nil then
                 comment_counts[c.in_reply_to_id] = record
+                comment_id_pos[c.in_reply_to_id] = record.line
             else
                 cc.count = cc.count + 1
             end
@@ -204,6 +205,8 @@ local function save_full_diff_view(diff_lines, comments)
             local cc = comment_counts[c.id]
             if cc == nil then
                 comment_counts[c.id] = record
+                comment_id_pos[c.id] = record.line
+                review_id_diff_pos[record.line] = c.pull_request_review_id
             else
                 cc.count = cc.count + 1
             end
@@ -239,6 +242,7 @@ local function load_pull_request(refreshing)
     local pull_req_files = api.files_for_pull(pull_req.number)
     if pull_req_files ~= nil then diff_files = differ.diff(pull_req_files.data) end
     save_desc_view(pull_req)
+    save_review_views(comments.reviews, comments.comments)
     save_full_diff_view(diff_lines, comments.comments)
     save_code_comments(comments.comments)
     save_issue_views(comments.issues)
@@ -504,15 +508,9 @@ function M.__internal.diff_show_comment()
     end
 
     local line = vim.fn.line(".")
-    local uri = diff_comment_refs[tostring(line)]
-    if not uri then
-        print("no comment for diff at line " .. tostring(line))
-        return
-    end
-
-    -- set the global comment_id so other comment functions can use it
+    local review_id = review_id_diff_pos[line]
+    local uri = primary_view.create_uri(pull_req.number, "review", tostring(review_id))
     primary_view:show(uri)
-    comment_id = comment_buffer_id_to_comment_id[vim.fn.bufnr("%")]
 end
 
 local function create_resp_body(rows)
@@ -559,7 +557,7 @@ function M.__internal.submit_reply()
     load_pull_request(true)
 end
 
--- go to the next line that has a comment in the full diff Use the stringified lines in diff_comment_refs to get the next largest one.
+-- go to the next line that has a comment in the full diff Use the stringified lines in the comment_id_pos to get the next largest one.
 function M.__internal.diff_next_comment()
     if not has_pr() then
         print("No PR")
@@ -575,8 +573,8 @@ function M.__internal.diff_next_comment()
     local line = vim.fn.line(".")
     local next_comment_line = vim.fn.line("$") -- start at end of doc and go back
 
-    for l in pairs(diff_comment_refs) do --
-        local ll = tonumber(l)
+    for _, l in pairs(comment_id_pos) do --
+        local ll = l
         if ll > line and ll < next_comment_line then next_comment_line = ll end
     end
     vim.api.nvim_win_set_cursor(0, {next_comment_line, 0})
