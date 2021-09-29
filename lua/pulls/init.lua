@@ -90,7 +90,8 @@ local function create_review_view(review)
     return lines
 end
 
-local review_file_pos = {}
+-- Files/lines that got reviewed, by key of review id.
+-- local review_file_pos = {}
 
 local function save_review_views(reviews, comments)
     local review_indexes = {} -- review id to index
@@ -115,6 +116,7 @@ local function save_review_views(reviews, comments)
     local comment_id_to_review_index = {}
 
     for _, c in ipairs(comments) do
+        -- the first comment in each review has the proper review id. For the rest, get the reply to id.
         if not c.in_reply_to_id then
             reviews[review_indexes[tostring(c.pull_request_review_id)]].comments[tostring(c.id)] = c
             comment_id_to_review_index[tostring(c.id)] = review_indexes[tostring(c.pull_request_review_id)]
@@ -139,9 +141,6 @@ local function save_review_views(reviews, comments)
         local tableempty = true
         for _ in pairs(r.comments) do tableempty = false end
         if r.body == "" and tableempty then goto continue end
-
-        -- set the global review location for go-to-file capability.
-        for _, c in pairs(r.comments) do review_file_pos[r.id] = {path = c.path, line = c.line} end
 
         local lines = create_review_view(r)
         local uri = primary_view.create_uri(pull_req.number, "review", tostring(r.id))
@@ -258,7 +257,6 @@ local function load_pull_request(refreshing)
     save_diff_view(diff_lines, comments.comments)
     save_code_comments(comments.comments)
     save_issue_views(comments.issues)
-    save_review_views(comments.reviews, comments.comments)
     -- save_comment_chains(comments.data)
     -- save_reviews(pull_req.number)
     if not refreshing then print("Done!") end
