@@ -183,11 +183,14 @@ local function save_diff_view(diff_lines, comments)
 
     -- get file positions in diff for the relative positions of the comments
     local file_idx = {}
+    local new_file_ct = 0
     for k, v in pairs(diff_lines) do
         if vim.startswith(v, "diff --git") then
             -- left and right side files in diff --git
             local _, b = differ.parse_diff_command(v)
-            file_idx[b] = k + 4 -- 4 is the space between the comand and the diff hunk
+            file_idx[b] = k + 3 + new_file_ct -- 4 is the space between the comand and the diff hunk
+        elseif vim.startswith(v, "new file") then
+            new_file_ct = new_file_ct + 1
         end
     end
 
@@ -225,6 +228,8 @@ local function save_diff_view(diff_lines, comments)
     primary_view:set_view_signs(uri, signs)
 end
 
+local diff_lines = nil
+
 local function load_pull_request(refreshing)
     if not refreshing then print("Loading pull request...") end
     local pulls = api.pulls()
@@ -242,7 +247,7 @@ local function load_pull_request(refreshing)
         return
     end
 
-    local diff_lines = util.split_newlines(diff.data)
+    diff_lines = util.split_newlines(diff.data)
 
     local comments = api.comments(pull_req.number)
 
@@ -601,33 +606,89 @@ function M.__internal.diff_go_to_file(do_preview)
     end
 
     local line = vim.fn.line(".")
-    print(line)
 
-    -- use the line to grab the review_id_diff_pos then use that review id to grab the review_file_pos
-    local review_id = review_id_diff_pos[line]
-    if review_id == nil then
-        print("no review id for line " .. line)
-        return
-    end
-    print(vim.inspect(review_id_diff_pos))
+    -- If the line starts with index, diff, new file @@@, --- /, +++ /, print an error. KISS for now.
+    -- Crawl upwards until the header is found (@@) and grab the + position. Then crawl up until a
+    -- `diff` is found and grab the b file, and go to b file at line `+` plus the amount tha we crawled up.
 
-    local found = review_file_pos[review_id]
-    if found == nil then
-        print("no file id for review " .. review_id)
-        return
+    for _, s in ipairs {"--- /", "+++ /", "@@", "new file", "diff", "index"} do
+        if vim.startswith(diff_lines[line], s) then
+            print("unable to navigate to file on that portion of the diff")
+            return
+        end
     end
-    print(vim.inspect(found))
+
+    local ct = 0
+    local file_line_ct = 0
+    local file = nil
+    local file_pos = nil
+
+    while file == nil do
+        local l = diff_lines[line - file_line_ct]
+
+        if vim.startswith(l, "@@") and file_pos == nil then
+            -- we found the header. Grab the addition line, and save it as the file_pos.
+            local addition_line = string.match(l, "@@ %-.+ %+(.+),.+ @@")
+            if addition_line == nil then
+                print("unable to parse header " .. l)
+                return
+            end
+
+            file_pos = tonumber(addition_line) + ct
+        elseif vim.startswith(l, "diff") then
+            file = string.match(l, "diff %-%-git a/.+ b/(.+)")
+            if file == nil then
+                print("unable to parse file " .. l)
+                return
+            end
+
+        elseif ct == line then
+            -- somehow we crawled all the way up
+            print("oh no")
+            print(vim.inspect({file = file, file_pos = file_pos, ct = ct}))
+            return
+        end
+
+        if not vim.startswith(l, "-") then ct = ct + 1 end
+        file_line_ct = file_line_ct + 1
+    end
 
     local current_win = vim.api.nvim_get_current_win()
+
     if do_preview then
         local w = primary_view:tagged_window()
         if w then vim.api.nvim_set_current_win(w) end
     end
 
-    vim.api.nvim_command(":e " .. found.path)
-    vim.api.nvim_win_set_cursor(0, {found.line, 0})
+    vim.api.nvim_command(":e " .. file)
+    vim.api.nvim_win_set_cursor(0, {file_pos - 1, 0})
 
     if do_preview then vim.api.nvim_set_current_win(current_win) end
+
+    --     -- use the line to grab the review_id_diff_pos then use that review id to grab the review_file_pos
+    --     -- All this was to only go to reviews.. that makes no sense, go to all files in the diff.
+    --     local review_id = review_id_diff_pos[line]
+    --     if review_id == nil then
+    --         print("no review id for line " .. line)
+    --         return
+    --     end
+
+    --     local found = review_file_pos[review_id]
+    --     if found == nil then
+    --         print("no file id for review " .. review_id)
+    --         return
+    --     end
+
+    --     local current_win = vim.api.nvim_get_current_win()
+    --     if do_preview then
+    --         local w = primary_view:tagged_window()
+    --         if w then vim.api.nvim_set_current_win(w) end
+    --     end
+
+    --     vim.api.nvim_command(":e " .. found.path)
+    --     vim.api.nvim_win_set_cursor(0, {found.line, 0})
+
+    --     if do_preview then vim.api.nvim_set_current_win(current_win) end
 end
 
 function M.__internal.description_edit()
