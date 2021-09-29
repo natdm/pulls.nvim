@@ -662,6 +662,8 @@ function M.__internal.diff_go_to_file(do_preview)
 
     vim.api.nvim_command(":e " .. file)
     vim.api.nvim_win_set_cursor(0, {file_pos - 1, 0})
+    -- center the cursor and expand folds
+    vim.cmd("normal zzzv")
 
     if do_preview then vim.api.nvim_set_current_win(current_win) end
 
