@@ -59,6 +59,8 @@ local function save_issue_views(issues)
     primary_view:save_qflist("issues", qflist)
 end
 
+local review_top_level_comment_ids = {}
+
 local function create_review_view(review)
     local lines = {}
 
@@ -69,6 +71,8 @@ local function create_review_view(review)
     end
 
     for _, c in pairs(review.comments) do --
+        -- set the top level review comment, needed for replies
+        if review_top_level_comment_ids[review.id] == nil then review_top_level_comment_ids[review.id] = c.id end
         table.insert(lines, "")
         table.insert(lines, string.format("### %s", c.path))
         table.insert(lines, "```diff")
@@ -144,7 +148,7 @@ local function save_review_views(reviews, comments)
 
         local lines = create_review_view(r)
         local uri = primary_view.create_uri(pull_req.number, "review", tostring(r.id))
-        local buf = primary_view:set_view("review", uri, lines, {})
+        local buf = primary_view:set_view("review", uri, lines, {id = r.id})
         local preview = ""
         if r.body ~= "" then
             preview = string.format("%s: [%s] %s", r.user.login, r.state, util.split_newlines(r.body)[1])
@@ -189,7 +193,7 @@ local function save_diff_view(diff_lines, comments)
             _, current_file_name = differ.parse_diff_command(v)
         elseif vim.startswith(v, "@@") and current_file_name ~= nil then
             file_idx[current_file_name] = k
-	    current_file_name = nil
+            current_file_name = nil
         end
     end
 
@@ -459,8 +463,6 @@ function M.__internal.diff_add_comment()
         ct = ct + 1
     end
 
-    print(file .. ":" .. tostring(diff_pos))
-
     -- set the global. It's gross but it's all we got.
     comment_details = {path = file, position = diff_pos}
 
@@ -551,6 +553,8 @@ function M.__internal.diff_show_comment()
 
     local line = vim.fn.line(".")
     local review_id = review_id_diff_pos[line]
+    -- set the global comment_id, which is used for replying, if requested.
+    comment_id = review_top_level_comment_ids[review_id]
     local uri = primary_view.create_uri(pull_req.number, "review", tostring(review_id))
     primary_view:show(uri)
 end
@@ -696,31 +700,6 @@ function M.__internal.diff_go_to_file(do_preview)
     vim.cmd("normal zzzv")
 
     if do_preview then vim.api.nvim_set_current_win(current_win) end
-
-    --     -- use the line to grab the review_id_diff_pos then use that review id to grab the review_file_pos
-    --     -- All this was to only go to reviews.. that makes no sense, go to all files in the diff.
-    --     local review_id = review_id_diff_pos[line]
-    --     if review_id == nil then
-    --         print("no review id for line " .. line)
-    --         return
-    --     end
-
-    --     local found = review_file_pos[review_id]
-    --     if found == nil then
-    --         print("no file id for review " .. review_id)
-    --         return
-    --     end
-
-    --     local current_win = vim.api.nvim_get_current_win()
-    --     if do_preview then
-    --         local w = primary_view:tagged_window()
-    --         if w then vim.api.nvim_set_current_win(w) end
-    --     end
-
-    --     vim.api.nvim_command(":e " .. found.path)
-    --     vim.api.nvim_win_set_cursor(0, {found.line, 0})
-
-    --     if do_preview then vim.api.nvim_set_current_win(current_win) end
 end
 
 function M.__internal.description_edit()

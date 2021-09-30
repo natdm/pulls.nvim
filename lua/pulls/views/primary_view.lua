@@ -127,8 +127,13 @@ function View:set_view(type, uri, content, config)
         local opt = {noremap = true, silent = true}
         api.nvim_buf_set_keymap(buf, "n", m.edit, call("description_edit()"), opt)
     elseif type == "review" then
-        -- TODO
-    elseif type == "comment" then
+        if not config.id then
+            print("Need an id in config for review")
+            return
+        end
+        api.nvim_buf_set_name(buf, string.format("review %i", config.id))
+        api.nvim_buf_set_keymap(buf, "n", "cc", call("reply_to_comment()"), {noremap = true})
+    elseif type == "comment" or type == "review" then
         if not config.id then
             print("Need an id in config for comment")
             return
