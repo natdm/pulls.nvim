@@ -404,39 +404,70 @@ function M.__internal.diff_add_comment()
 
     -- from github api:
     -- Note: The position value equals the number of lines down from the first "@@"
-    -- hunk header in the file you want to add a comment. The line just below the
+    -- hunk header in the *file* you want to add a comment. The line just below the
     -- "@@" line is position 1, the next line is position 2, and so on. The position
     -- in the diff continues to increase through lines of whitespace and additional
     -- hunks until the beginning of a new file.
 
-    local cursor_pos = vim.fn.line(".")
+    local line = vim.fn.line(".")
     -- sub one since the api requires the position to be below the header.
-    if cursor_pos == -1 then
+    if line == -1 then
         print("unable to put comment on header")
         return
     end
 
-    local header = {diff_line = 0}
-    for _, diff in ipairs(diff_chunk_start_lines) do --
-        if diff.diff_line < cursor_pos and --
-        diff.diff_line > header.diff_line then --
-            header = diff
+    for _, s in ipairs {"--- /", "+++ /", "@@", "new file", "diff", "index"} do
+        if vim.startswith(diff_lines[line], s) then
+            print("unable to navigate to file on that portion of the diff")
+            return
         end
     end
 
-    if header.diff_line == 0 then
-        print("Unable to place comment")
-        return
+    -- find out where we are on the diff, crawl up and count lines until you get to the diff
+    -- headrer.
+    local file = nil
+    local diff_pos = nil
+    local ct = 1
+
+    while file == nil do
+        local l = diff_lines[line - ct]
+
+        if vim.startswith(l, "@@") and diff_pos == nil then
+            -- we found the header. Grab the addition line, and save it as the diff_pos.
+            local addition_line = string.match(l, "@@ %-.+ %+(.+),.+ @@")
+            if addition_line == nil then
+                print("unable to parse header " .. l)
+                return
+            end
+
+            -- save the diff position, all we need to do now is find the file.
+            diff_pos = ct
+
+        elseif vim.startswith(l, "diff") then
+            file = string.match(l, "diff %-%-git a/.+ b/(.+)")
+            if file == nil then
+                print("unable to parse file " .. l)
+                return
+            end
+
+        elseif ct == line then
+            -- somehow we crawled all the way up
+            print("scanned to top of file and didn't find position for add_comment.")
+            return
+        end
+
+        ct = ct + 1
     end
 
-    -- sub 4 since what's being tracked in the diff_line is the diff command, which sits
-    -- four lines above the start of the diff
-    comment_details = {path = header.path, position = cursor_pos - header.diff_line - 4}
+    print(file .. ":" .. tostring(diff_pos))
+
+    -- set the global. It's gross but it's all we got.
+    comment_details = {path = file, position = diff_pos}
 
     -- Check if this line already has a comment on it -- only have to check
     -- current comments in the diff.
-    local existing_comment = diff_comment_refs[tostring(cursor_pos)]
-    if existing_comment then
+    local review_id = review_id_diff_pos[line]
+    if review_id then
         -- existing comment, go to chain
         -- Use PullsDiffShowComment since it sets up some environmentals
         M.__internal.diff_show_comment()
@@ -444,7 +475,7 @@ function M.__internal.diff_add_comment()
     else
         -- new comment, opening input window.
         primary_view:remove_highlight_comment_line() -- clear any highlights that might be hanging around
-        primary_view:highlight_comment_line(cursor_pos)
+        primary_view:highlight_comment_line(line)
         primary_view:show_input("new_comment")
     end
 end
@@ -456,6 +487,7 @@ function M.__internal.submit_comment()
         return
     end
     local resp = api.new_comment(pull_req.number, comment_details.path, comment_details.position, git.sha(), lines)
+    comment_details = nil
     primary_view:hide_input()
     primary_view:remove_highlight_comment_line()
     if not resp.success then print("unable to post comment: " .. (resp.error or "<nil>")) end
@@ -633,6 +665,7 @@ function M.__internal.diff_go_to_file(do_preview)
             end
 
             file_pos = tonumber(addition_line) + ct
+
         elseif vim.startswith(l, "diff") then
             file = string.match(l, "diff %-%-git a/.+ b/(.+)")
             if file == nil then
@@ -642,8 +675,7 @@ function M.__internal.diff_go_to_file(do_preview)
 
         elseif ct == line then
             -- somehow we crawled all the way up
-            print("oh no")
-            print(vim.inspect({file = file, file_pos = file_pos, ct = ct}))
+            print("scanned to top of file and didn't find position for go_to_file.")
             return
         end
 
