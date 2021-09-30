@@ -167,10 +167,7 @@ local function save_desc_view(_pull_req)
     primary_view:set_view("description", uri, desc, {})
 end
 
--- line number of each chunk in the diff, along with their corresponding file path
--- {{line = n, path = p}, {..}, ..}
-local diff_chunk_start_lines = {}
-
+-- comment locations within the diff, can be used to go to comments
 local comment_id_pos = {}
 
 local review_id_diff_pos = {} -- review id to file diff pos
@@ -181,15 +178,18 @@ local function save_diff_view(diff_lines, comments)
     primary_view:set_view("full_diff", uri, diff_lines, {})
 
     -- get file positions in diff for the relative positions of the comments
+    -- Since the diff shows the file in the `diff --git` line, and the actual line number
+    -- in the @@, grab the file, then keep going until you spot the @@. You only need the
+    -- first occurrence since the API gives the position based on the first one.
     local file_idx = {}
-    local new_file_ct = 0
+    local current_file_name = nil
     for k, v in pairs(diff_lines) do
         if vim.startswith(v, "diff --git") then
             -- left and right side files in diff --git
-            local _, b = differ.parse_diff_command(v)
-            file_idx[b] = k + 3 + new_file_ct -- 4 is the space between the comand and the diff hunk
-        elseif vim.startswith(v, "new file") then
-            new_file_ct = new_file_ct + 1
+            _, current_file_name = differ.parse_diff_command(v)
+        elseif vim.startswith(v, "@@") and current_file_name ~= nil then
+            file_idx[current_file_name] = k
+	    current_file_name = nil
         end
     end
 
