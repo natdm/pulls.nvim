@@ -1,6 +1,6 @@
 # Pulls.nvim
 
-[CLICK HERE FOR DEMO](https://youtu.be/dMYJFKe9A_8)
+![pull demo](./media/pulls_demo.gif)
 
 *TL;DR: View, comment, browse a pull request on the currently checked out branch.*
 
