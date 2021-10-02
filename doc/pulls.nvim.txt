@@ -1,5 +1,5 @@
-================================================================================
-Pulls.nvim                                                         *pulls.nvim*
+==============================================================================================
+Pulls.nvim                                                                        *pulls.nvim*
 
 View, comment, browse a pull request on the currently checked out branch.
 
@@ -34,7 +34,7 @@ Usage: >
     -- ... etc
 <
 
-pulls.setup({opts})                                              *pulls.setup()*
+pulls.setup({opts})                                                            *pulls.setup()*
     Setup function to be run by user. Calling with nil sets the default mappings.
     The mappings are grouped by the diff the contents would have. Each diff 
     contains it's own mappings, so duplicating a key combination is not harmful.
@@ -81,60 +81,73 @@ pulls.setup({opts})                                              *pulls.setup()*
 <
     
 
-pulls.refresh()                                                      *pulls.refresh()*
+pulls.refresh()                                                              *pulls.refresh()*
 
-    Refresh the plugin state, calling github for new information. This calls multiple ithub endpoints. The larger the PR, the slower this may take. Blocking call.
+    Refresh the plugin state, calling github for new information. This calls multiple github
+    endpoints. The larger the PR, the slower this may take. Blocking call.
 
-pulls.description()                                              *pulls.description()*
+pulls.description()                                                      *pulls.description()*
 
     View the description of the pull request. If there is a tagged window, it will be
     opened in the tagged window.
 
-pulls.diff()
+pulls.diff()                                                                    *pulls.diff()*
 
-    View the complete diff of the pull request. From here, all mappings from `config.diff` are available. Functionality includes viewing comments, going to file (and line), and adding comments. By default, these are mapped like so:
+    View the complete diff of the pull request. From here, all mappings from `config.diff`
+    are available. Functionality includes viewing comments, going to file (and line), and
+    adding comments. By default, these are mapped like so:
 
          `cs`: Show a comment under the current cursor (cc would do the same).
-         `cc`: Add a new comment under the cursor. This will open the thread of any existing comments.
+         `cc`: Add a new comment under the cursor. This will open the thread of any existing
+	 comments.
          `cn`: Skip to the next comment in the diff (goes to EOF if none).
          `ch`: Go to next file (hunk) in diff, separated by diff headers (@@ ... @@)
          `cf`: Goes to the file of the diff the cursor is under.
-         `cp`: If a window is tagged, the preview will show in that window, and the cursor will remain in the diff. No effect at all if no window is tagged.
+         `cp`: If a window is tagged, the preview will show in that window, and the cursor
+	 will remain in the diff. No effect at all if no window is tagged.
   
-     Within the diff, comments that are current are yellow, and comments that are out of date are grey -- shown as a integer in the number column.
+     Within the diff, comments that are current are yellow, and comments that are out of date
+     are grey -- shown as a integer in the number column.
 
-pulls.issues()
+pulls.issues()                                                                *pulls.issues()*
     
-    Show all issue comments in the quickfix list. A "regular comment" in the PR, not attached to a line of code. These can't be responded to and don't have threads. 
+    Show all issue comments in the quickfix list. A "regular comment" in the PR, not attached
+    to a line of code. These can't be responded to and don't have threads. 
 
-pulls.comments()
+pulls.comments()                                                            *pulls.comments()*
     
-    All comments on the PR, loaded in the quickfix list. A comment in github is *always* tied to a review and *always* on a line of the diff. Thus, it may be more helpful to take a look at reviews, which might have a top-level review comment, but will have a top-level code comment.
+    All comments on the PR, loaded in the quickfix list. A comment in github is ALWAYS tied to
+    a review and ALWAYS on a line of the diff. Thus, it may be more helpful to take a look at
+    reviews, which might have a top-level review comment, but will have a top-level code
+    comment.
 
-pulls.reviews()
+pulls.reviews()                                                              *pulls.reviews()*
 
-    All reviews on the PR, loaded in the quickfix list. Reviews have one or more comments (and each comment can have zero or more responses).
+    All reviews on the PR, loaded in the quickfix list. Reviews have one or more comments (and
+    each comment can have zero or more responses).
 
-pulls.code_comments()
+pulls.code_comments()                                                  *pulls.code_comments()*
 
-    All places in the codebase that have a code comment, loaded in the quickfix list. These do not go to the comments chain, they go to the file/location.
+    All places in the codebase that have a code comment, loaded in the quickfix list. These do
+    not go to the comments chain, they go to the file/location.
 
-pulls.changes()                                            *pulls.changes()*
+pulls.changes()                                                              *pulls.changes()*
 
-    List all the changes within all the files for the current PR in a quickfix window. Any entry will go to the file/location. The change preview is the diff (c)hunk header, for now.
+    List all the changes within all the files for the current PR in a quickfix window. Any
+    entry will go to the file/location. The change preview is the diff (c)hunk header, for now.
 
-pulls.tag_window()                                                *pulls.tag_window()*
+pulls.tag_window()                                                        *pulls.tag_window()*
 
     Tag a window as the main view-port for future actions. If the scra een is split for
     windows A and B, if the diff is up in A, but window B is tagged, any actions
     in A (viewing a comment, going to a file, etc) will appear in B instead, and
     the diff in A remains where it is.
 
-pulls.untag_window()                                            *pulls.untag_window()*
+pulls.untag_window()                                                    *pulls.untag_window()*
 
     Untag the previously tagged window.
 
-pulls.highlight_changes()                                  *pulls.highlight_changes()*
+pulls.highlight_changes()                                          *pulls.highlight_changes()*
 
     In a file, highlight all the numbers that correlate to diff changes. 
 

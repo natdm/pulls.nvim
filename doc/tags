@@ -1,0 +1,14 @@
+pulls-author	pulls.nvim.txt	/*pulls-author*
+pulls.changes()	pulls.nvim.txt	/*pulls.changes()*
+pulls.code_comments()	pulls.nvim.txt	/*pulls.code_comments()*
+pulls.comments()	pulls.nvim.txt	/*pulls.comments()*
+pulls.description()	pulls.nvim.txt	/*pulls.description()*
+pulls.diff()	pulls.nvim.txt	/*pulls.diff()*
+pulls.highlight_changes()	pulls.nvim.txt	/*pulls.highlight_changes()*
+pulls.issues()	pulls.nvim.txt	/*pulls.issues()*
+pulls.nvim	pulls.nvim.txt	/*pulls.nvim*
+pulls.refresh()	pulls.nvim.txt	/*pulls.refresh()*
+pulls.reviews()	pulls.nvim.txt	/*pulls.reviews()*
+pulls.setup()	pulls.nvim.txt	/*pulls.setup()*
+pulls.tag_window()	pulls.nvim.txt	/*pulls.tag_window()*
+pulls.untag_window()	pulls.nvim.txt	/*pulls.untag_window()*
