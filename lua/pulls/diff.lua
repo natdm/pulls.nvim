@@ -2,6 +2,27 @@ local util = require("pulls.util")
 
 local M = {}
 
+function M.parse_diff_header(diff)
+    local _, _, rm_start_s, rm_ct_s, add_start_s, add_ct_s = string.find( --
+    diff, "@@ %-(%d+),(%d+) %+(%d+),(%d+) @@")
+
+    local rm_start = tonumber(rm_start_s)
+    local rm_ct = tonumber(rm_ct_s)
+    local add_start = tonumber(add_start_s)
+    local add_ct = tonumber(add_ct_s)
+
+    local diff_preview = "-" .. rm_start_s .. "," .. rm_ct_s .. --
+    " +" .. add_start_s .. "," .. add_ct_s
+
+    return { --
+        remove_start = rm_start,
+        remove_ct = rm_ct,
+        add_start = add_start,
+        add_ct = add_ct,
+        preview = diff_preview
+    }
+end
+
 function M.diff(files)
     -- prepare the signs
     local entries = {}
@@ -125,7 +146,7 @@ function M.diff(files)
                         table.insert(changes_by_line, {line = l, action = "d"})
                     else
                         -- just deleting some code from a file. Since we can't show deletes,
-			-- mark a single line as a delete for all counted delete lines
+                        -- mark a single line as a delete for all counted delete lines
                         table.insert(changes_by_line, {line = l, action = "d"})
                     end
                     delete_ctr = 0
@@ -134,6 +155,10 @@ function M.diff(files)
         end
     end
     return entries
+end
+
+function M.parse_diff_command(cmd)
+	return cmd:match("diff %-%-git a/(.+) b/(.+)")
 end
 
 return M

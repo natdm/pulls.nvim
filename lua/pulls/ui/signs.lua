@@ -38,7 +38,7 @@ function M.add(bufnr, signs)
 
     for _, sign in ipairs(signs) do --
         if sign.action ~= "" then
-            local name = "pulls_unk"
+            local name = "pulls_hunk"
             if sign.action == "a" then name = "pulls_add" end
             if sign.action == "d" then name = "pulls_rem" end
             if sign.action == "c" then name = "pulls_alt" end

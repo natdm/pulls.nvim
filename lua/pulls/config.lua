@@ -6,7 +6,7 @@ return {
 
         diff = { -- Mappings for the diff view.
             -- Show a comment under the current cursor (cc would do the same).
-            show_comment = "cg",
+            show_comment = "cs",
             -- Add a new comment under the cursor. This will open the thread
             -- of any existing comments.
             add_comment = "cc",

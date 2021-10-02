@@ -46,4 +46,19 @@ function M.file_info()
     return {file = file, line = line, bufnr = bufnr}
 end
 
+-- find key for a table, running fn for each value in the table.
+function M.find_key(t, fn, default)
+    default = default or false
+    local f = fn
+
+    if type(f) ~= "function" then
+        f = function(x)
+            return x == fn
+        end
+    end
+
+    for k, v in pairs(t) do if f(v) then return k end end
+    return false
+end
+
 return M

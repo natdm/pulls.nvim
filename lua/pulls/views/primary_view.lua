@@ -1,6 +1,5 @@
 local api = vim.api
 local ui_signs = require("pulls.ui.signs")
-local git = require("pulls.git")
 
 local View = {}
 local commenting_ext_id_mark = 500
@@ -51,7 +50,7 @@ end
 -- returns 0 on error
 function View:get_buffer(type, config)
     local name = config.name or "-"
-    local uri = self.create_uri(self.pr_number, type. name)
+    local uri = self.create_uri(self.pr_number, type, name)
     local buftype = config.buftype or 'nofile'
     local filetype = config.filetype or 'txt'
     local buf = self.buffers[uri]
@@ -69,6 +68,10 @@ function View:get_buffer(type, config)
     return buf
 end
 
+function View:get_bufnr(uri)
+    return self.buffers[uri]
+end
+
 function View.create_comment_uri(path, line)
     return string.format("%s:%s", path, line)
 end
@@ -83,6 +86,7 @@ function View:set_view_signs(uri, signs)
 end
 
 local function call(fn)
+    -- helper to call an internal function in the main module.
     return ":lua require('pulls').__internal." .. fn .. "<CR>"
 end
 
@@ -95,7 +99,7 @@ function View:set_view(type, uri, content, config)
     api.nvim_buf_set_option(buf, "modifiable", true)
 
     vim.api.nvim_buf_set_name(buf, uri)
-    if content ~= nil then api.nvim_buf_set_lines(buf, 0, -1, false, content) end
+    if content ~= nil then api.nvim_buf_set_lines(buf, 0, -1, true, content) end
 
     -- "default" settings, toggle in each if to change
     api.nvim_buf_set_option(buf, 'buftype', 'nofile')
@@ -103,6 +107,7 @@ function View:set_view(type, uri, content, config)
     api.nvim_buf_set_option(buf, 'filetype', 'markdown')
     api.nvim_buf_set_option(buf, "modifiable", config.modifiable or false)
 
+    api.nvim_buf_set_keymap(buf, "n", "?", call("help()"), {})
     if type == "diff" then
         api.nvim_buf_set_option(buf, 'filetype', 'diff')
     elseif type == "full_diff" then
@@ -121,13 +126,26 @@ function View:set_view(type, uri, content, config)
         local m = self.config.mappings.description
         local opt = {noremap = true, silent = true}
         api.nvim_buf_set_keymap(buf, "n", m.edit, call("description_edit()"), opt)
-    elseif type == "comment" then
+    elseif type == "review" then
+        if not config.id then
+            print("Need an id in config for review")
+            return
+        end
+        api.nvim_buf_set_name(buf, string.format("review %i", config.id))
+        api.nvim_buf_set_keymap(buf, "n", "cc", call("reply_to_comment()"), {noremap = true})
+    elseif type == "comment" or type == "review" then
         if not config.id then
             print("Need an id in config for comment")
             return
         end
-        api.nvim_buf_set_name(buf, string.format("Comment %s", tostring(config.id)))
+        api.nvim_buf_set_name(buf, string.format("Comment %i", config.id))
         api.nvim_buf_set_keymap(buf, "n", "cc", call("reply_to_comment()"), {noremap = true})
+    elseif type == "issue" then
+        if not config.id then
+            print("Need an id in config for issue")
+            return
+        end
+        api.nvim_buf_set_name(buf, string.format("Issue %s", config.id))
     else
         print("not sure what to do with type " .. type)
     end
@@ -145,6 +163,10 @@ function View:debug()
         print("loaded: ", api.nvim_buf_is_loaded(b))
         print("valid: ", api.nvim_buf_is_valid(b))
     end
+end
+
+function View:help()
+    -- TODO: Display help window
 end
 
 -- this expects the current buffer is the full diff, and will get the line number and check the

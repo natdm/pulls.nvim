@@ -9,10 +9,8 @@ local M = {__internal = {}}
 
 local config = {}
 
-local comments = {}
 local comment_id = nil
 local pull_req = nil
-local pull_req_files = nil -- just the api response, no real parsing
 
 -- pulls_win and pulls_buf should be where *any* of the diffs or comment chains go. As well as
 -- any reviews, descriptions, etc -- keep it to one window so it's easy to navigate and control.
@@ -25,53 +23,146 @@ local diff_files = nil
 
 local primary_view = nil
 
--- full diff line number to comment uri for comment chain
-local diff_comment_refs = {}
+local function save_code_comments(comments)
+    local code_comments_qf = {}
+    local latest_code_comments = {}
 
-local comment_buffer_id_to_comment_id = {}
-
-local function save_comment_chains(_comments)
-    -- save all comment chains in buffers, and then preload a qflist with the buffers
-    local comment_buffer_qf = {}
-    local comment_line_ref_qf = {}
-    for fpath, c in pairs(_comments) do -- file level
-        for line, chain in pairs(c) do -- line level (chain)
-            local list = {}
-            table.insert(list, #list + 1, "```diff")
-            for s in chain[1].diff_hunk:gmatch("[^\r\n]+") do table.insert(list, s) end
-            table.insert(list, #list + 1, "```")
-            -- TODO: Use nvim_win_get_width here, and repeat '-'
-            table.insert(list, #list + 1, "________________________________________________")
-            -- line number to comment, ignoring line no since we are loading a qflist that goes
-            -- to a comment chain.
-            for _, cc in ipairs(chain) do
-                table.insert(list, #list + 1, "From: " .. cc.user)
-                table.insert(list, #list + 1, "Date: " .. cc.created_at)
-                table.insert(list, #list + 1, "----------------------------")
-                for s in cc.body:gmatch("[^\r\n]+") do table.insert(list, s) end
-                table.insert(list, #list + 1, "")
-                table.insert(list, #list + 1, "________________________________________________")
-            end
-            local uri = views.create_comment_uri(fpath, line)
-            local buf = primary_view:set_view("comment", uri, list, {id = chain[1].id})
-            if not buf then
-                print("unable to save comment view")
-                return
-            end
-            -- set this for easier replies later
-            comment_buffer_id_to_comment_id[buf] = chain[1].id
-            table.insert(comment_buffer_qf, {bufnr = buf, lnum = 0, text = chain[#chain].preview})
-            local cline = chain[1].line
-            local flag = ""
-            if not cline then
-                flag = "[outdated] "
-                cline = chain[1].original_line
-            end
-            table.insert(comment_line_ref_qf, {filename = fpath, lnum = cline, text = flag .. chain[#chain].preview})
+    for _, c in ipairs(comments) do
+        local k = c.path .. tostring(c.line)
+        local latest = latest_code_comments[k]
+        if latest == nil then
+            latest_code_comments[k] = c
+        elseif latest.id < c.id then
+            latest_code_comments[k] = c
         end
     end
-    primary_view:save_qflist("comment_chains", comment_buffer_qf)
-    primary_view:save_qflist("comments", comment_line_ref_qf)
+
+    for _, c in pairs(comments) do
+        table.insert(code_comments_qf, { --
+            lnum = c.line,
+            filename = c.path,
+            text = string.format("%s: %s", c.user.login, c.body)
+        })
+    end
+
+    primary_view:save_qflist("code_comments", code_comments_qf)
+end
+
+local function save_issue_views(issues)
+    local qflist = {}
+    for _, issue in ipairs(issues) do
+        local body = util.split_newlines(issue.body)
+        local uri = views.create_uri(pull_req.number, "issue", tostring(issue.id))
+        local buf = primary_view:set_view("issue", uri, body, {id = issue.id})
+        table.insert(qflist, {bufnr = buf, lnum = 1, text = string.format("%s: %s", issue.user.login, body[1])})
+    end
+    primary_view:save_qflist("issues", qflist)
+end
+
+local review_top_level_comment_ids = {}
+
+local function create_review_view(review)
+    local lines = {}
+
+    table.insert(lines, string.format("## %s left a review:", review.user.login))
+    if review.body ~= "" then
+        table.insert(lines, string.format("*Commented on %s*", review.submitted_at)) -- TODO: Add edited flag (created_at < updated_at)
+        for _, b in ipairs(util.split_newlines(review.body)) do table.insert(lines, string.format("> %s<br>", b)) end
+    end
+
+    for _, c in pairs(review.comments) do --
+        -- set the top level review comment, needed for replies
+        if review_top_level_comment_ids[review.id] == nil then review_top_level_comment_ids[review.id] = c.id end
+        table.insert(lines, "")
+        table.insert(lines, string.format("### %s", c.path))
+        table.insert(lines, "```diff")
+        for _, d in ipairs(util.split_newlines(c.diff_hunk)) do table.insert(lines, d) end
+        table.insert(lines, "```")
+        table.insert(lines, "")
+        table.insert(lines, string.format("> _*%s* at %s_:<br>", c.user.login, c.created_at))
+        for _, l in ipairs(util.split_newlines(c.body)) do table.insert(lines, string.format("> %s<br>", l)) end
+        if c.replies then
+            table.insert(lines, "")
+            for _, r in ipairs(c.replies) do
+                table.insert(lines, string.format("> %s at %s:<br>", r.user.login, r.created_at))
+                for _, b in ipairs(util.split_newlines(r.body)) do table.insert(lines, string.format("> %s<br>", b)) end
+                table.insert(lines, "")
+            end
+        end
+        table.insert(lines, "")
+    end
+    return lines
+end
+
+-- Files/lines that got reviewed, by key of review id.
+-- local review_file_pos = {}
+
+local function save_review_views(reviews, comments)
+    local review_indexes = {} -- review id to index
+    for i, r in ipairs(reviews) do
+        review_indexes[tostring(r.id)] = i
+        r.comments = {}
+    end
+
+    -- reviews could have comments, or not have comments. The comments that they may
+    -- have might show an `in_reply_to_id`, indicating the comment chain they are on.
+    --
+    -- Reviews won't have diffs, but the comments are guaranteed to have diffs.
+    --
+    -- Build a table with..
+    -- {review..., comments: {[id]: {..., replies: {{...}}}}}
+
+    -- first loop to get all the comments that don't have an in_reply_to_id field and store
+    -- them in the review.
+
+    -- apparently the pull_request_review_id in replies is not correct? So we need to save the
+    -- comment id and point it to the review index so we know which one to grab.
+    local comment_id_to_review_index = {}
+
+    for _, c in ipairs(comments) do
+        -- the first comment in each review has the proper review id. For the rest, get the reply to id.
+        if not c.in_reply_to_id then
+            reviews[review_indexes[tostring(c.pull_request_review_id)]].comments[tostring(c.id)] = c
+            comment_id_to_review_index[tostring(c.id)] = review_indexes[tostring(c.pull_request_review_id)]
+        end
+    end
+
+    for _, c in ipairs(comments) do
+        if c.in_reply_to_id then
+            local idx = comment_id_to_review_index[tostring(c.in_reply_to_id)]
+            local thread = reviews[idx].comments[tostring(c.in_reply_to_id)]
+            if not thread.replies then
+                thread.replies = {c}
+            else
+                table.insert(thread.replies, c)
+            end
+        end
+    end
+
+    local reviews_qf = {}
+
+    for _, r in ipairs(reviews) do
+        local tableempty = true
+        for _ in pairs(r.comments) do tableempty = false end
+        if r.body == "" and tableempty then goto continue end
+
+        local lines = create_review_view(r)
+        local uri = primary_view.create_uri(pull_req.number, "review", tostring(r.id))
+        local buf = primary_view:set_view("review", uri, lines, {id = r.id})
+        local preview = ""
+        if r.body ~= "" then
+            preview = string.format("%s: [%s] %s", r.user.login, r.state, util.split_newlines(r.body)[1])
+        else
+            for _, c in pairs(r.comments) do
+                -- save the comment to review relation since the API is incorrect.
+                preview = string.format("%s: [%s] %s", r.user.login, r.state, util.split_newlines(c.body)[1])
+            end
+        end
+        table.insert(reviews_qf, {bufnr = buf, lnum = 1, text = preview})
+        ::continue::
+    end
+
+    primary_view:save_qflist("reviews", reviews_qf)
 end
 
 local function save_desc_view(_pull_req)
@@ -80,71 +171,67 @@ local function save_desc_view(_pull_req)
     primary_view:set_view("description", uri, desc, {})
 end
 
--- line number of each chunk in the diff, along with their corresponding file path
--- {{line = n, path = p}, {..}, ..}
-local diff_chunk_start_lines = {}
+-- comment locations within the diff, can be used to go to comments
+local comment_id_pos = {}
 
-local function save_full_diff_view(pr_no, _comments)
-    local diff = api.diff(pr_no)
-    if diff.error then
-        print("unable to load full diff: " .. diff.data)
-        return
-    end
+local review_id_diff_pos = {} -- review id to file diff pos
 
-    local diff_comment_signs = {}
+local function save_diff_view(diff_lines, comments)
+    -- TODO: save comment review ID's to actual review ID's and their pos on the diff.
+    local uri = views.create_uri(pull_req.number, "diff", "full")
+    primary_view:set_view("full_diff", uri, diff_lines, {})
 
-    local diff_lines = util.split_newlines(diff.data)
-    for i, line in ipairs(diff_lines) do --
-        local add_start = nil
-        if vim.startswith(line, "diff") then --
-            local _, _, _, _, add_start_s, add_ct_s = string.find(diff_lines[i + 4], "@@ %-(%d+),(%d+) %+(%d+),(%d+) @@")
-            add_start = tonumber(add_start_s)
-            local path = line:match(".*%sb/(.*)") -- match the diff --git a/.. b/(..)
-            local pcomments = _comments[path]
-            -- pcomments are per line, but we will need position. Iterate all of them,
-            -- ignoring the line, and using the position.
-            -- the math should always be the comment position + the line (i) where the
-            -- header is plus 4, due to the diff file format
-            if pcomments then
-                for _, c in pairs(pcomments) do --
-                    local pos = c[1].position
-                    -- position is nil if comment is old
-                    if pos ~= vim.NIL and pos ~= nil then
-                        pos = pos + i + 4
-                        -- save a reference to the line number in the diff to the uri
-                        -- of the comment for keymappings.
-                        local comment_uri = views.create_comment_uri(c[1].path, tostring(c[1].original_line))
-                        diff_comment_refs[tostring(pos)] = comment_uri
-                        table.insert(diff_comment_signs, {action = "comment", line = pos, count = #c})
-                    end
-                end
-            end
-            -- BUG: This isn't very exact as to where it goes. Ideally, it'd go to the file, at the place where you have yoour cursor.
-            table.insert(diff_chunk_start_lines, { --
-                diff_line = i,
-                path = path,
-                file_line = add_start
-            })
-
+    -- get file positions in diff for the relative positions of the comments
+    -- Since the diff shows the file in the `diff --git` line, and the actual line number
+    -- in the @@, grab the file, then keep going until you spot the @@. You only need the
+    -- first occurrence since the API gives the position based on the first one.
+    local file_idx = {}
+    local current_file_name = nil
+    for k, v in pairs(diff_lines) do
+        if vim.startswith(v, "diff --git") then
+            -- left and right side files in diff --git
+            _, current_file_name = differ.parse_diff_command(v)
+        elseif vim.startswith(v, "@@") and current_file_name ~= nil then
+            file_idx[current_file_name] = k
+            current_file_name = nil
         end
     end
 
-    local uri = views.create_uri(pull_req.number, "diff", "full")
-    primary_view:set_view("full_diff", uri, diff_lines, {})
-    primary_view:set_view_signs(uri, diff_comment_signs)
+    local comment_counts = {}
+    for _, c in ipairs(comments) do
+        local record = {}
+        if c.position == vim.NIL then
+            record = {line = file_idx[c.path] + c.original_position, action = "comment_outdated", count = 1}
+        else
+            record = {line = file_idx[c.path] + c.position, action = "comment", count = 1}
+        end
+
+        if c.in_reply_to_id ~= nil then
+            local cc = comment_counts[c.in_reply_to_id]
+            if cc == nil then
+                comment_counts[c.in_reply_to_id] = record
+                comment_id_pos[c.in_reply_to_id] = record.line
+            else
+                cc.count = cc.count + 1
+            end
+        else
+            local cc = comment_counts[c.id]
+            if cc == nil then
+                comment_counts[c.id] = record
+                comment_id_pos[c.id] = record.line
+                review_id_diff_pos[record.line] = c.pull_request_review_id
+            else
+                cc.count = cc.count + 1
+            end
+        end
+    end
+
+    local signs = {}
+    for _, v in pairs(comment_counts) do table.insert(signs, v) end
+    primary_view:set_view_signs(uri, signs)
 end
 
-local function save_reviews(pull_req_no)
-    local reviews = api.get_reviews(pull_req_no)
-    if not reviews.success then
-        print("unable to get reviews: " .. reviews.error)
-        return
-    end
-    -- NOTE:
-    -- Reviews some times have a `body` field, but some times do not. Do they have diffs?
-    -- They should always have relating `/comments`, which will have diffs and bodies.
-    -- How do we want to show these in an intuitie way?
-end
+local diff_lines = nil
 
 local function load_pull_request(refreshing)
     if not refreshing then print("Loading pull request...") end
@@ -153,21 +240,39 @@ local function load_pull_request(refreshing)
         print("No pull request found")
         return
     end
-    pull_req = pulls[1]
 
+    pull_req = pulls[1]
     if not primary_view then primary_view = views:new(pull_req.number, config) end
-    comments = api.comments_for_pull(pull_req.number)
-    pull_req_files = api.files_for_pull(pull_req.number)
+
+    local diff = api.diff(pull_req.number)
+    if diff.error then
+        print("unable to load full diff: " .. diff.error)
+        return
+    end
+
+    diff_lines = util.split_newlines(diff.data)
+
+    local comments = api.comments(pull_req.number)
+
+    local pull_req_files = api.files_for_pull(pull_req.number)
     if pull_req_files ~= nil then diff_files = differ.diff(pull_req_files.data) end
     save_desc_view(pull_req)
-    save_full_diff_view(pull_req.number, comments.data)
-    save_comment_chains(comments.data)
+    save_review_views(comments.reviews, comments.comments)
+    save_diff_view(diff_lines, comments.comments)
+    save_code_comments(comments.comments)
+    save_issue_views(comments.issues)
+    -- save_comment_chains(comments.data)
+    -- save_reviews(pull_req.number)
     if not refreshing then print("Done!") end
 end
 
 local function has_pr()
     if not pull_req then load_pull_request() end
     return pull_req ~= nil
+end
+
+function M.setup(cfg)
+    config = cfg or require("pulls.config")
 end
 
 function M.description()
@@ -179,21 +284,12 @@ function M.description()
     primary_view:show(uri, {split = true})
 end
 
-function M.tag_window()
-    -- tag a window and use it for any displays.
-    local win = vim.fn.win_getid()
-    primary_view:tag_window(win)
-end
-
-function M.untag_window()
-    primary_view:remove_tag()
-end
-
-function M.setup(cfg)
-    config = cfg or require("pulls.config")
-end
-function M.refresh()
-    load_pull_request()
+function M.issues()
+    if not has_pr() then
+        print("No PR")
+        return
+    end
+    primary_view:show_qflist("issues")
 end
 
 function M.comments()
@@ -204,12 +300,20 @@ function M.comments()
     primary_view:show_qflist("comments")
 end
 
-function M.get_comment_chains()
+function M.reviews()
     if not has_pr() then
         print("No PR")
         return
     end
-    primary_view:show_qflist("comment_chains")
+    primary_view:show_qflist("reviews")
+end
+
+function M.code_comments()
+    if not has_pr() then
+        print("No PR")
+        return
+    end
+    primary_view:show_qflist("code_comments")
 end
 
 function M.diff()
@@ -218,10 +322,10 @@ function M.diff()
         return
     end
     local uri = views.create_uri(pull_req.number, "diff", "full")
-    primary_view:show(uri, {split = true})
+    primary_view:show(uri, {})
 end
 
-function M.list_changes()
+function M.changes()
     if not has_pr() then
         print("No PR")
         return
@@ -245,6 +349,20 @@ function M.list_changes()
 
     vim.fn.setqflist(entries, "r")
     vim.cmd("copen")
+end
+
+function M.tag_window()
+    -- tag a window and use it for any displays.
+    local win = vim.fn.win_getid()
+    primary_view:tag_window(win)
+end
+
+function M.untag_window()
+    primary_view:remove_tag()
+end
+
+function M.refresh()
+    load_pull_request()
 end
 
 function M.highlight_changes()
@@ -291,39 +409,68 @@ function M.__internal.diff_add_comment()
 
     -- from github api:
     -- Note: The position value equals the number of lines down from the first "@@"
-    -- hunk header in the file you want to add a comment. The line just below the
+    -- hunk header in the *file* you want to add a comment. The line just below the
     -- "@@" line is position 1, the next line is position 2, and so on. The position
     -- in the diff continues to increase through lines of whitespace and additional
     -- hunks until the beginning of a new file.
 
-    local cursor_pos = vim.fn.line(".")
+    local line = vim.fn.line(".")
     -- sub one since the api requires the position to be below the header.
-    if cursor_pos == -1 then
+    if line == -1 then
         print("unable to put comment on header")
         return
     end
 
-    local header = {diff_line = 0}
-    for _, diff in ipairs(diff_chunk_start_lines) do --
-        if diff.diff_line < cursor_pos and --
-        diff.diff_line > header.diff_line then --
-            header = diff
+    for _, s in ipairs {"--- /", "+++ /", "@@", "new file", "diff", "index"} do
+        if vim.startswith(diff_lines[line], s) then
+            print("unable to navigate to file on that portion of the diff")
+            return
         end
     end
 
-    if header.diff_line == 0 then
-        print("Unable to place comment")
-        return
+    -- find out where we are on the diff, crawl up and count lines until you get to the diff
+    -- headrer.
+    local file = nil
+    local diff_pos = nil
+    local ct = 1
+
+    while file == nil do
+        local l = diff_lines[line - ct]
+
+        if vim.startswith(l, "@@") and diff_pos == nil then
+            -- we found the header. Grab the addition line, and save it as the diff_pos.
+            local addition_line = string.match(l, "@@ %-.+ %+(.+),.+ @@")
+            if addition_line == nil then
+                print("unable to parse header " .. l)
+                return
+            end
+
+            -- save the diff position, all we need to do now is find the file.
+            diff_pos = ct
+
+        elseif vim.startswith(l, "diff") then
+            file = string.match(l, "diff %-%-git a/.+ b/(.+)")
+            if file == nil then
+                print("unable to parse file " .. l)
+                return
+            end
+
+        elseif ct == line then
+            -- somehow we crawled all the way up
+            print("scanned to top of file and didn't find position for add_comment.")
+            return
+        end
+
+        ct = ct + 1
     end
 
-    -- sub 4 since what's being tracked in the diff_line is the diff command, which sits
-    -- four lines above the start of the diff
-    comment_details = {path = header.path, position = cursor_pos - header.diff_line - 4}
+    -- set the global. It's gross but it's all we got.
+    comment_details = {path = file, position = diff_pos}
 
     -- Check if this line already has a comment on it -- only have to check
     -- current comments in the diff.
-    local existing_comment = diff_comment_refs[tostring(cursor_pos)]
-    if existing_comment then
+    local review_id = review_id_diff_pos[line]
+    if review_id then
         -- existing comment, go to chain
         -- Use PullsDiffShowComment since it sets up some environmentals
         M.__internal.diff_show_comment()
@@ -331,7 +478,7 @@ function M.__internal.diff_add_comment()
     else
         -- new comment, opening input window.
         primary_view:remove_highlight_comment_line() -- clear any highlights that might be hanging around
-        primary_view:highlight_comment_line(cursor_pos)
+        primary_view:highlight_comment_line(line)
         primary_view:show_input("new_comment")
     end
 end
@@ -343,11 +490,13 @@ function M.__internal.submit_comment()
         return
     end
     local resp = api.new_comment(pull_req.number, comment_details.path, comment_details.position, git.sha(), lines)
+    comment_details = nil
     primary_view:hide_input()
     primary_view:remove_highlight_comment_line()
     if not resp.success then print("unable to post comment: " .. (resp.error or "<nil>")) end
     load_pull_request(true)
 end
+
 function M.__internal.diff_next()
     if not has_pr() then
         print("No PR")
@@ -404,15 +553,11 @@ function M.__internal.diff_show_comment()
     end
 
     local line = vim.fn.line(".")
-    local uri = diff_comment_refs[tostring(line)]
-    if not uri then
-        print("no comment for diff at line " .. tostring(line))
-        return
-    end
-
-    -- set the global comment_id so other comment functions can use it
+    local review_id = review_id_diff_pos[line]
+    -- set the global comment_id, which is used for replying, if requested.
+    comment_id = review_top_level_comment_ids[review_id]
+    local uri = primary_view.create_uri(pull_req.number, "review", tostring(review_id))
     primary_view:show(uri)
-    comment_id = comment_buffer_id_to_comment_id[vim.fn.bufnr("%")]
 end
 
 local function create_resp_body(rows)
@@ -448,7 +593,7 @@ function M.__internal.submit_reply()
     local comment = create_resp_body(content)
 
     comment = table.concat(comment, '\r\n')
-    -- comment = vim.fn.escape(comment, [["\]]) -- does this even do anything
+
     local response = api.reply(pull_req.number, comment_id, comment)
     if response.success ~= true then
         print(response.error)
@@ -459,7 +604,7 @@ function M.__internal.submit_reply()
     load_pull_request(true)
 end
 
--- go to the next line that has a comment in the full diff Use the stringified lines in diff_comment_refs to get the next largest one.
+-- go to the next line that has a comment in the full diff Use the stringified lines in the comment_id_pos to get the next largest one.
 function M.__internal.diff_next_comment()
     if not has_pr() then
         print("No PR")
@@ -475,8 +620,8 @@ function M.__internal.diff_next_comment()
     local line = vim.fn.line(".")
     local next_comment_line = vim.fn.line("$") -- start at end of doc and go back
 
-    for l in pairs(diff_comment_refs) do --
-        local ll = tonumber(l)
+    for _, l in pairs(comment_id_pos) do --
+        local ll = l
         if ll > line and ll < next_comment_line then next_comment_line = ll end
     end
     vim.api.nvim_win_set_cursor(0, {next_comment_line, 0})
@@ -488,35 +633,70 @@ function M.__internal.diff_go_to_file(do_preview)
         print("No PR")
         return
     end
+
     local name = vim.api.nvim_buf_get_name(0)
     if not vim.endswith(name, "Diff") then
         print("not on full diff")
         return
     end
+
     local line = vim.fn.line(".")
-    local found = nil
-    for _, f in ipairs(diff_chunk_start_lines) do
-        if f.diff_line <= line then --
-            if not found then
-                found = f
-            elseif found.diff_line < f.diff_line then
-                found = f
-            end
+
+    -- If the line starts with index, diff, new file @@@, --- /, +++ /, print an error. KISS for now.
+    -- Crawl upwards until the header is found (@@) and grab the + position. Then crawl up until a
+    -- `diff` is found and grab the b file, and go to b file at line `+` plus the amount tha we crawled up.
+
+    for _, s in ipairs {"--- /", "+++ /", "@@", "new file", "diff", "index"} do
+        if vim.startswith(diff_lines[line], s) then
+            print("unable to navigate to file on that portion of the diff")
+            return
         end
     end
-    if not found then
-        print("unable to find file")
-        return
+
+    local ct = 0
+    local file_line_ct = 0
+    local file = nil
+    local file_pos = nil
+
+    while file == nil do
+        local l = diff_lines[line - file_line_ct]
+
+        if vim.startswith(l, "@@") and file_pos == nil then
+            -- we found the header. Grab the addition line, and save it as the file_pos.
+            local addition_line = string.match(l, "@@ %-.+ %+(.+),.+ @@")
+            if addition_line == nil then
+                print("unable to parse header " .. l)
+                return
+            end
+
+            file_pos = tonumber(addition_line) + ct
+
+        elseif vim.startswith(l, "diff") then
+            file = string.match(l, "diff %-%-git a/.+ b/(.+)")
+            if file == nil then
+                print("unable to parse file " .. l)
+                return
+            end
+
+        elseif ct == line then
+            -- somehow we crawled all the way up
+            print("scanned to top of file and didn't find position for go_to_file.")
+            return
+        end
+
+        if not vim.startswith(l, "-") then ct = ct + 1 end
+        file_line_ct = file_line_ct + 1
     end
 
     local current_win = vim.api.nvim_get_current_win()
-    if do_preview then
-        local w = primary_view:tagged_window()
-        if w then vim.api.nvim_set_current_win(w) end
-    end
 
-    vim.api.nvim_command(":e " .. found.path)
-    vim.api.nvim_win_set_cursor(0, {found.file_line, 0})
+    local w = primary_view:tagged_window()
+    if w then vim.api.nvim_set_current_win(w) end
+
+    vim.api.nvim_command(":e " .. file)
+    vim.api.nvim_win_set_cursor(0, {file_pos - 1, 0})
+    -- center the cursor and expand folds
+    vim.cmd("normal zzzv")
 
     if do_preview then vim.api.nvim_set_current_win(current_win) end
 end
@@ -559,6 +739,10 @@ function M.__internal.submit_description_edit()
     end
     primary_view:hide_input()
     load_pull_request(true)
+end
+
+function M.__internal.help()
+    primary_view:help()
 end
 
 return M

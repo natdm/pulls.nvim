@@ -38,7 +38,7 @@ local function paginate(per_page, ok_status, req_fn)
     for _, r in ipairs(body) do table.insert(result, r) end
 
     local body_ct = #body
-    while #body_ct == per_page do
+    while body_ct == per_page do
         page = page + 1
         resp = req_fn(per_page, page)
         if resp.status ~= ok_status then return {success = false, error = format_error_resp(resp)} end
