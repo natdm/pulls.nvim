@@ -56,7 +56,7 @@ nmapsl("ps", '<cmd>lua require("pulls").comments()<CR>')
 nmapsl("pd", '<cmd>lua require("pulls").description()<CR>')
 nmapsl("pp", '<cmd>lua require("pulls").diff()<CR>')
 nmapsl("pn", '<cmd>lua require("pulls").diff_next()<CR>')
-nmapsl("pc", '<cmd>lua require("pulls").list_changes()<CR>')
+nmapsl("pc", '<cmd>lua require("pulls").changes()<CR>')
 nmapsl("ph", '<cmd>lua require("pulls").highlight_changes()<CR>')
 -- ... etc
 ```

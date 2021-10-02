@@ -271,6 +271,10 @@ local function has_pr()
     return pull_req ~= nil
 end
 
+function M.setup(cfg)
+    config = cfg or require("pulls.config")
+end
+
 function M.description()
     if not has_pr() then
         print("No PR")
@@ -286,23 +290,6 @@ function M.issues()
         return
     end
     primary_view:show_qflist("issues")
-end
-
-function M.tag_window()
-    -- tag a window and use it for any displays.
-    local win = vim.fn.win_getid()
-    primary_view:tag_window(win)
-end
-
-function M.untag_window()
-    primary_view:remove_tag()
-end
-
-function M.setup(cfg)
-    config = cfg or require("pulls.config")
-end
-function M.refresh()
-    load_pull_request()
 end
 
 function M.comments()
@@ -338,7 +325,7 @@ function M.diff()
     primary_view:show(uri, {})
 end
 
-function M.list_changes()
+function M.changes()
     if not has_pr() then
         print("No PR")
         return
@@ -362,6 +349,20 @@ function M.list_changes()
 
     vim.fn.setqflist(entries, "r")
     vim.cmd("copen")
+end
+
+function M.tag_window()
+    -- tag a window and use it for any displays.
+    local win = vim.fn.win_getid()
+    primary_view:tag_window(win)
+end
+
+function M.untag_window()
+    primary_view:remove_tag()
+end
+
+function M.refresh()
+    load_pull_request()
 end
 
 function M.highlight_changes()
@@ -689,10 +690,8 @@ function M.__internal.diff_go_to_file(do_preview)
 
     local current_win = vim.api.nvim_get_current_win()
 
-    if do_preview then
-        local w = primary_view:tagged_window()
-        if w then vim.api.nvim_set_current_win(w) end
-    end
+    local w = primary_view:tagged_window()
+    if w then vim.api.nvim_set_current_win(w) end
 
     vim.api.nvim_command(":e " .. file)
     vim.api.nvim_win_set_cursor(0, {file_pos - 1, 0})
