@@ -742,4 +742,8 @@ function M.__internal.submit_description_edit()
     load_pull_request(true)
 end
 
+function M.__internal.help()
+    primary_view:help()
+end
+
 return M

@@ -1,6 +1,5 @@
 local api = vim.api
 local ui_signs = require("pulls.ui.signs")
-local git = require("pulls.git")
 
 local View = {}
 local commenting_ext_id_mark = 500
@@ -108,6 +107,7 @@ function View:set_view(type, uri, content, config)
     api.nvim_buf_set_option(buf, 'filetype', 'markdown')
     api.nvim_buf_set_option(buf, "modifiable", config.modifiable or false)
 
+    api.nvim_buf_set_keymap(buf, "n", "?", call("help()"), {})
     if type == "diff" then
         api.nvim_buf_set_option(buf, 'filetype', 'diff')
     elseif type == "full_diff" then
@@ -163,6 +163,10 @@ function View:debug()
         print("loaded: ", api.nvim_buf_is_loaded(b))
         print("valid: ", api.nvim_buf_is_valid(b))
     end
+end
+
+function View:help()
+    -- TODO: Display help window
 end
 
 -- this expects the current buffer is the full diff, and will get the line number and check the

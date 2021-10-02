@@ -48,9 +48,6 @@ end
 
 -- find key for a table, running fn for each value in the table.
 function M.find_key(t, fn, default)
-    print(vim.inspect(t))
-    print(fn)
-
     default = default or false
     local f = fn
 
