@@ -138,7 +138,12 @@ pulls.changes()                                                              *pu
 
 pulls.tag_window()                                                        *pulls.tag_window()*
 
-    Tag a window as the main view-port for future actions. If the scra een is split for
+    The point of 'tagging' a window is to be able to have the PR diff up, and navigate through
+    code and comments in a split view, while keeping the diff up. From the diff, you can view
+    code, comments, reviews, files, etc. It might make sense to view this in a split view, or
+    have one of many splits dedicated towards the changes you want to view.
+
+    Tag a window as the main view-port for future actions. If the screen is split for
     windows A and B, if the diff is up in A, but window B is tagged, any actions
     in A (viewing a comment, going to a file, etc) will appear in B instead, and
     the diff in A remains where it is.
