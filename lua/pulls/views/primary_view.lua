@@ -1,5 +1,6 @@
 local api = vim.api
 local ui_signs = require("pulls.ui.signs")
+local help = require("pulls.help")
 
 local View = {}
 local commenting_ext_id_mark = 500
@@ -25,6 +26,10 @@ end
 
 function View:tag_window(win)
     self.display_win = win
+end
+
+function View:show_help()
+    help.show(self.config)
 end
 
 function View:remove_tag()
